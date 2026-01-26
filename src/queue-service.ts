@@ -6,6 +6,7 @@ import {
   calculateBackoff,
   convertSiteOrderToCRM,
   convertSiteOrderToPipelineCard,
+  PAYMENT_MAPPING,
 } from "./utils";
 
 const api = new SDK("https://openapi.keycrm.app/v1", Bun.env["KEYCRM_KEY"]);
@@ -40,8 +41,11 @@ export async function processOrder(orderData: string): Promise<boolean> {
       redis.set(siteOrder.externalOrderId, String(result.id));
       if (siteOrder.paymentStatus == 1 && result["id"]) {
         const orderId = String(result["id"]);
-        const newOrderPayment = await api.order.createNewOrderPayment(orderId, {
-          payment_method: siteOrder.paymentMethod,
+        const paymentMethodId = PAYMENT_MAPPING[siteOrder.paymentMethod];
+
+        await api.order.createNewOrderPayment(orderId, {
+          payment_method_id: paymentMethodId,
+          payment_method: !paymentMethodId ? siteOrder.paymentMethod : undefined,
           amount: siteOrder.totalCost,
         });
       }
