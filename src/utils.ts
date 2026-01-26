@@ -11,13 +11,31 @@ export function calculateBackoff(retryCount: number): number {
   return backoff + Math.random() * 1000;
 }
 
+// Мапінг способів доставки
+export const DELIVERY_MAPPING: Record<string, number> = {
+  "Нова Пошта": 1,
+  "Укрпошта": 2,
+  "Самовивіз": 3,
+  // Додайте інші за потреби
+};
+
+// Мапінг способів оплати
+export const PAYMENT_MAPPING: Record<string, number> = {
+  "LiqPay": 1,
+  "WayForPay": 2,
+  "Готівка": 3,
+  // Додайте інші за потреби
+};
+
 // Конвертація замовлення з сайту в формат CRM
 export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
+  const fullName = `${siteOrder.firstName} ${siteOrder.lastName}`.trim();
+
   return {
-    source_id: 2, // ID джерела (сайт)
+    source_id: CONFIG.SOURCE_ID,
     source_uuid: siteOrder.externalOrderId,
     buyer: {
-      full_name: `${siteOrder.firstName} ${siteOrder.lastName}`.trim(),
+      full_name: fullName,
       email: siteOrder.email,
       phone: siteOrder.phone,
     },
@@ -32,17 +50,21 @@ export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
       quantity: item.quantity,
       picture: item.imageUrl,
       comment: item.description,
+      // Якщо є знижка на конкретний товар, можна додати її тут
+      // discount_amount: ...,
     })),
-    shipping: siteOrder.deliveryAddress
-      ? {
-          shipping_address_city: extractCity(siteOrder.deliveryAddress),
-          shipping_receive_point: siteOrder.deliveryAddress,
-        }
-      : undefined,
+    shipping: {
+      shipping_address_city: siteOrder.deliveryAddress ? extractCity(siteOrder.deliveryAddress) : undefined,
+      shipping_receive_point: siteOrder.deliveryAddress || undefined,
+      recipient_full_name: fullName, // ПІБ отримувача
+      recipient_phone: siteOrder.phone,
+      delivery_service_id: DELIVERY_MAPPING[siteOrder.deliveryMethod] || undefined,
+    },
   };
 }
 
 export function convertSiteOrderToPipelineCard(order: SiteOrder) {
+  const fullName = `${order.firstName} ${order.lastName}`.trim();
   const extraInfoParts: string[] = [];
 
   extraInfoParts.push(`Зовнішній ID замовлення: ${order.externalOrderId}`);
@@ -73,13 +95,15 @@ export function convertSiteOrderToPipelineCard(order: SiteOrder) {
     extraInfoParts.push(`Додаткова інформація: ${order.additionalInfo}`);
 
   return {
-    title: `Замовлення #${order.externalOrderId}`,
+    pipeline_id: CONFIG.PIPELINE_ID, // Додаємо ID воронки
+    source_id: CONFIG.SOURCE_ID,
+    title: `Замовлення #${order.externalOrderId} (${fullName})`,
     communicate_at: new Date(order.date).toISOString(),
 
     manager_comment: extraInfoParts.join("\n"),
 
     contact: {
-      full_name: `${order.firstName} ${order.lastName}`.trim() || undefined,
+      full_name: fullName || undefined,
       email: order.email || undefined,
       phone: order.phone || undefined,
     },
