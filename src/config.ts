@@ -11,6 +11,8 @@ export const REDIS_KEYS = {
   PENDING_QUEUE: "orders:pending",
   PROCESSING_QUEUE: "orders:processing",
   DEAD_LETTER_QUEUE: "orders:dlq",
+  ORDER_MAPPING: (siteOrderId: string) => `order:mapping:${siteOrderId}`,
+  ORDER_HISTORY: "orders:history",
   RETRY_COUNT: (orderId: string) => `orders:retry:${orderId}`,
   RETRY_AT: (orderId: string) => `orders:retry_at:${orderId}`,
 };

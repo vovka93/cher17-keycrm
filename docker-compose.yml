@@ -9,6 +9,7 @@ services:
     environment:
       NODE_ENV: production
       KEYCRM_KEY: ${KEYCRM_KEY}
+      REDIS_URL: ${REDIS_URL}
     depends_on:
       - redis
     restart: unless-stopped

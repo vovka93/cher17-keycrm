@@ -30,6 +30,23 @@ export interface SiteOrder {
   }>;
 }
 
+export interface OrderMapping {
+  _rowid: string; // Unique identifier for the order
+  site_order: SiteOrder;
+  crm_order?: any;
+  crm_pipeline_card?: any;
+  status_history: Array<{
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    date: number;
+    crm_response?: any;
+    error_message?: string;
+    retry_count?: number;
+  }>;
+  current_status: 'pending' | 'processing' | 'completed' | 'failed';
+  created_at: number;
+  updated_at: number;
+}
+
 export interface WebhookPayload {
   orders: SiteOrder[];
 }
