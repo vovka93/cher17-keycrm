@@ -34,7 +34,6 @@ export interface OrderMapping {
   _rowid: string; // Unique identifier for the order
   site_order: SiteOrder;
   crm_order?: any;
-  crm_pipeline_card?: any;
   status_history: Array<{
     status: 'pending' | 'processing' | 'completed' | 'failed';
     date: number;

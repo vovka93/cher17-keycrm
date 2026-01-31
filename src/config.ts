@@ -13,6 +13,8 @@ export const REDIS_KEYS = {
   DEAD_LETTER_QUEUE: "orders:dlq",
   ORDER_MAPPING: (siteOrderId: string) => `order:mapping:${siteOrderId}`,
   ORDER_HISTORY: "orders:history",
+  ORDER_HISTORY_INDEX: "orders:history:index", // Sorted set for order IDs by timestamp
+  ORDER_STATUS_HISTORY: (orderId: string) => `order:status_history:${orderId}`, // Hash for status history
   RETRY_COUNT: (orderId: string) => `orders:retry:${orderId}`,
   RETRY_AT: (orderId: string) => `orders:retry_at:${orderId}`,
 };
