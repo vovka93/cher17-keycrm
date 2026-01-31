@@ -102,28 +102,6 @@ async function createNewOrder(
 
     console.log(`📦 Замовлення створено в CRM з ID: ${crmOrderId}`);
 
-    // Створення платежу якщо оплачено
-    let paymentResponse = null;
-    if (siteOrder.paymentStatus === 1) {
-      try {
-        console.log(`💳 Створення платежу для замовлення ${crmOrderId}...`);
-        paymentResponse = await api.order.createNewOrderPayment(crmOrderId, {
-          payment_method: siteOrder.paymentMethod,
-          amount: siteOrder.totalCost,
-        });
-        console.log(`💰 Платіж створено`);
-      } catch (paymentError) {
-        console.warn(`⚠️ Попередження при створенні платежу:`, paymentError);
-        // Не зупиняємо обробку, якщо платіж не створено
-        paymentResponse = {
-          error:
-            paymentError instanceof Error
-              ? paymentError.message
-              : "Unknown payment error",
-        };
-      }
-    }
-
     // Отримуємо повні дані замовлення з CRM
     let fullOrderData = orderResponse;
     try {
@@ -136,8 +114,6 @@ async function createNewOrder(
     // Формуємо розширену відповідь для історії
     const enhancedCrmResponse = {
       ...fullOrderData,
-      payment_created: !!paymentResponse,
-      payment_data: paymentResponse,
       payment_method: siteOrder.paymentMethod,
       payment_amount: siteOrder.totalCost,
     };

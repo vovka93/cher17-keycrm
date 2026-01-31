@@ -998,7 +998,7 @@ export class OrderService {
     }[];
     custom_fields?: {
       uuid?: string;
-      value?: string;
+      value?: string | number;
     }[];
   }): Promise<Order> {
     return this.client.request("POST", "/order", body);
@@ -1393,7 +1393,7 @@ export class PipelinesService {
     }[];
     custom_fields?: {
       uuid?: string;
-      value?: string;
+      value?: string | number;
     }[];
   }): Promise<PipelineCard> {
     return this.client.request("POST", "/pipelines/cards", body);

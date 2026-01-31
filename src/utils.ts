@@ -13,13 +13,22 @@ export function calculateBackoff(retryCount: number): number {
 
 // Конвертація замовлення з сайту в формат CRM
 export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
-  const shippingData = parseShippingAddress(siteOrder.deliveryAddress, siteOrder.deliveryMethod);
-  
+  const shippingData = parseShippingAddress(
+    siteOrder.deliveryAddress,
+    siteOrder.deliveryMethod,
+  );
+  let discount =
+    siteOrder.discount && siteOrder.discount > 0
+      ? siteOrder.discount
+      : undefined;
   return {
     source_id: 2, // ID джерела (сайт)
     source_uuid: siteOrder.externalOrderId,
     buyer_comment: siteOrder.additionalInfo || undefined,
-    ordered_at: new Date(siteOrder.date).toISOString().replace('T', ' ').substring(0, 19),
+    ordered_at: new Date(siteOrder.date)
+      .toISOString()
+      .replace("T", " ")
+      .substring(0, 19),
     buyer: {
       full_name: `${siteOrder.firstName} ${siteOrder.lastName}`.trim(),
       email: siteOrder.email,
@@ -33,77 +42,102 @@ export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
       picture: item.imageUrl,
       comment: item.description,
       // Add product attributes for better categorization
-      properties: item.category ? [
-        {
-          name: "Категорія",
-          value: item.category
-        }
-      ] : undefined,
+      properties: item.category
+        ? [
+            {
+              name: "Категорія",
+              value: item.category,
+            },
+          ]
+        : undefined,
     })),
-    shipping: shippingData ? {
-      shipping_service: shippingData.service,
-      shipping_address_city: shippingData.city,
-      shipping_address_country: "Ukraine", // Assuming Ukraine based on context
-      shipping_address_region: shippingData.region,
-      shipping_address_zip: shippingData.zip,
-      shipping_receive_point: shippingData.receivePoint,
-      shipping_secondary_line: shippingData.secondaryLine,
-    } : undefined,
-    payments: siteOrder.paymentStatus === 1 ? [{
-      payment_method: siteOrder.paymentMethod,
-      amount: siteOrder.totalCost,
-      status: "paid" as const,
-      description: `Оплата замовлення #${siteOrder.externalOrderId}`,
-    }] : [{
-      payment_method: siteOrder.paymentMethod,
-      amount: siteOrder.totalCost,
-      status: "not_paid" as const,
-      description: `Замовлення #${siteOrder.externalOrderId}`,
-    }],
-    discount_amount: siteOrder.discount && siteOrder.discount > 0 ? siteOrder.discount : undefined,
+    shipping: shippingData
+      ? {
+          shipping_service: shippingData.service,
+          shipping_address_city: shippingData.city,
+          shipping_address_country: "Ukraine", // Assuming Ukraine based on context
+          shipping_address_region: shippingData.region,
+          shipping_address_zip: shippingData.zip,
+          shipping_receive_point: shippingData.receivePoint,
+          shipping_secondary_line: shippingData.secondaryLine,
+        }
+      : undefined,
+    payments:
+      siteOrder.paymentStatus === 1
+        ? [
+            {
+              payment_method: siteOrder.paymentMethod,
+              amount: siteOrder.totalCost,
+              status: "paid" as const,
+              description: `Оплата замовлення #${siteOrder.externalOrderId}`,
+            },
+          ]
+        : [
+            {
+              payment_method: siteOrder.paymentMethod,
+              amount: siteOrder.totalCost,
+              status: "not_paid" as const,
+              description: `Замовлення #${siteOrder.externalOrderId}`,
+            },
+          ],
+    total_discount: discount,
     // Add marketing data if available
     marketing: {
       utm_source: "website",
       utm_medium: "direct",
     },
+    custom_fields: [
+      {
+        uuid: "OR_1001",
+        value: discount ?? 0,
+      },
+    ].filter((field) => !!field.value),
   };
 }
 
 export function convertSiteOrderToPipelineCard(order: SiteOrder) {
-  const shippingData = parseShippingAddress(order.deliveryAddress, order.deliveryMethod);
+  const shippingData = parseShippingAddress(
+    order.deliveryAddress,
+    order.deliveryMethod,
+  );
   const orderDate = new Date(order.date);
-  
+
   // Create formatted manager comment with structured information
   const managerComment = [
     `📋 ЗАМОВЛЕННЯ #${order.externalOrderId}`,
-    '',
+    "",
     `👤 Клієнт: ${order.firstName} ${order.lastName}`,
     `📞 Телефон: ${formatPhoneNumber(order.phone)}`,
     `📧 Email: ${order.email}`,
-    '',
-    `💰 Сума: ${order.totalCost} ${order.currency || 'UAH'}`,
-    `🚚 Доставка: ${order.deliveryMethod || 'Не вказано'}`,
-    `💳 Оплата: ${order.paymentMethod || 'Не вказано'}`,
-    '',
+    "",
+    `💰 Сума: ${order.totalCost} ${order.currency || "UAH"}`,
+    `🚚 Доставка: ${order.deliveryMethod || "Не вказано"}`,
+    `💳 Оплата: ${order.paymentMethod || "Не вказано"}`,
+    "",
     `📦 Товари (${order.items.length} шт.):`,
-    ...order.items.map((item, index) => 
-      `${index + 1}. ${item.name} (${item.quantity} шт. × ${item.cost} ${order.currency || 'UAH'})`
+    ...order.items.map(
+      (item, index) =>
+        `${index + 1}. ${item.name} (${item.quantity} шт. × ${item.cost} ${order.currency || "UAH"})`,
     ),
-    '',
-    `📍 Адреса доставки: ${order.deliveryAddress || 'Не вказано'}`,
-    order.additionalInfo ? `📝 Коментар: ${order.additionalInfo}` : '',
-    '',
-    `⏰ Час замовлення: ${orderDate.toLocaleString('uk-UA')}`,
+    "",
+    `📍 Адреса доставки: ${order.deliveryAddress || "Не вказано"}`,
+    order.additionalInfo ? `📝 Коментар: ${order.additionalInfo}` : "",
+    "",
+    `⏰ Час замовлення: ${orderDate.toLocaleString("uk-UA")}`,
     `🔗 ID клієнта: ${order.externalCustomerId}`,
-    `📊 Статус оплати: ${order.paymentStatus === 1 ? 'Оплачено' : 'Не оплачено'}`,
-    `📈 Статус замовлення: ${order.statusDescription || 'Невідомо'} (${order.orderStatus})`,
-  ].filter(line => line !== '').join('\n');
+    `📊 Статус оплати: ${order.paymentStatus === 1 ? "Оплачено" : "Не оплачено"}`,
+    `📈 Статус замовлення: ${order.statusDescription || "Невідомо"} (${order.orderStatus})`,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
 
   return {
     title: `Замовлення #${order.externalOrderId}`,
+    pipeline_id: 3,
+    source_id: 2,
     communicate_at: orderDate.toISOString(),
     manager_comment: managerComment,
-    
+
     contact: {
       full_name: `${order.firstName} ${order.lastName}`.trim() || undefined,
       email: order.email || undefined,
@@ -118,75 +152,54 @@ export function convertSiteOrderToPipelineCard(order: SiteOrder) {
       picture: item.imageUrl || undefined,
       comment: item.description,
       // Add product properties for better tracking
-      properties: item.category ? [
-        {
-          name: "Категорія",
-          value: item.category
-        }
-      ] : undefined,
+      properties: item.category
+        ? [
+            {
+              name: "Категорія",
+              value: item.category,
+            },
+          ]
+        : undefined,
     })),
 
-    // Add payment information if available
-    payments: order.paymentStatus === 1 ? [{
-      payment_method: order.paymentMethod,
-      amount: order.totalCost,
-      status: "paid" as const,
-      description: `Передоплата за замовлення #${order.externalOrderId}`,
-    }] : [{
-      payment_method: order.paymentMethod,
-      amount: order.totalCost,
-      status: "not_paid" as const,
-      description: `Замовлення #${order.externalOrderId}`,
-    }],
-
-    // Add custom fields for better categorization
     custom_fields: [
       {
-        uuid: "source_platform", // This should be configured in keyCRM
-        value: "website"
+        uuid: "LD_1002",
+        value: order.discount ?? 0,
       },
-      {
-        uuid: "external_order_id", // This should be configured in keyCRM
-        value: order.externalOrderId
-      },
-      order.orderStatus === 0 ? {
-        uuid: "order_type", // This should be configured in keyCRM
-        value: "new_lead"
-      } : null,
-      shippingData?.city ? {
-        uuid: "delivery_city", // This should be configured in keyCRM
-        value: shippingData.city
-      } : null,
-    ].filter(field => field !== null),
+    ].filter((field) => !!field.value),
   };
 }
 
 // Форматування номера телефону в міжнародний формат
 export function formatPhoneNumber(phone: string): string {
   // Remove all non-digit characters
-  const digits = phone.replace(/\D/g, '');
-  
+  const digits = phone.replace(/\D/g, "");
+
   // If starts with 380 and has 12 digits, add +
-  if (digits.startsWith('380') && digits.length === 12) {
+  if (digits.startsWith("380") && digits.length === 12) {
     return `+${digits}`;
   }
-  
+
   // If starts with 0 and has 10 digits, add 380
-  if (digits.startsWith('0') && digits.length === 10) {
+  if (digits.startsWith("0") && digits.length === 10) {
     return `+38${digits}`;
   }
-  
+
   // If starts with 80 and has 11 digits, convert to +380
-  if (digits.startsWith('80') && digits.length === 11) {
+  if (digits.startsWith("80") && digits.length === 11) {
     return `+3${digits}`;
   }
-  
+
   // Return original if can't format
   return phone;
 }
 
 // Розширений парсер адреси доставки
-export function parseShippingAddress(deliveryAddress: string | null, deliveryMethod?: string): {
+export function parseShippingAddress(
+  deliveryAddress: string | null,
+  deliveryMethod?: string,
+): {
   service?: string;
   city?: string;
   region?: string;
@@ -195,44 +208,48 @@ export function parseShippingAddress(deliveryAddress: string | null, deliveryMet
   secondaryLine?: string;
 } | null {
   if (!deliveryAddress) return null;
-  
+
   // Extract delivery service from method
   let service = deliveryMethod;
-  if (deliveryMethod?.toLowerCase().includes('нова пошта')) {
-    service = 'Нова Пошта';
-  } else if (deliveryMethod?.toLowerCase().includes('укрпошта')) {
-    service = 'Укрпошта';
+  if (deliveryMethod?.toLowerCase().includes("нова пошта")) {
+    service = "Нова Пошта";
+  } else if (deliveryMethod?.toLowerCase().includes("укрпошта")) {
+    service = "Укрпошта";
   }
-  
+
   // Parse address components
-  const addressParts = deliveryAddress.split(',').map(part => part.trim());
-  
-  let city = '';
-  let region = '';
-  let zip = '';
-  let receivePoint = '';
-  let secondaryLine = '';
-  
+  const addressParts = deliveryAddress.split(",").map((part) => part.trim());
+
+  let city = "";
+  let region = "";
+  let zip = "";
+  let receivePoint = "";
+  let secondaryLine = "";
+
   // Try to extract city (usually first part before comma or contains "м." or "вул.")
   for (const part of addressParts) {
-    if (part.includes('м.') || part.match(/^[А-Яа-яієїґ]+$/i) && !city) {
-      city = part.replace(/^м\.\s*/, '').trim();
-    } else if (part.includes('вул.') || part.includes('просп.') || part.includes('пров.')) {
+    if (part.includes("м.") || (part.match(/^[А-Яа-яієїґ]+$/i) && !city)) {
+      city = part.replace(/^м\.\s*/, "").trim();
+    } else if (
+      part.includes("вул.") ||
+      part.includes("просп.") ||
+      part.includes("пров.")
+    ) {
       secondaryLine = part;
-    } else if (part.includes('Відділення') || part.includes('Склад')) {
+    } else if (part.includes("Відділення") || part.includes("Склад")) {
       receivePoint = part;
     } else if (part.match(/^\d{5}$/)) {
       zip = part;
-    } else if (part.includes('обл.') || part.includes('область')) {
+    } else if (part.includes("обл.") || part.includes("область")) {
       region = part;
     }
   }
-  
+
   // If no city found, use first non-empty part
   if (!city && addressParts.length > 0) {
-    city = addressParts[0] || '';
+    city = addressParts[0] || "";
   }
-  
+
   return {
     service,
     city: city || undefined,
@@ -246,7 +263,7 @@ export function parseShippingAddress(deliveryAddress: string | null, deliveryMet
 // Простий парсер міста з адреси (для зворотної сумісності)
 export function extractCity(address: string): string {
   const shipping = parseShippingAddress(address);
-  return shipping?.city || '';
+  return shipping?.city || "";
 }
 
 // Utility для затримки
@@ -254,29 +271,32 @@ export const sleep = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 // Валідація даних замовлення перед конвертацією
-export function validateSiteOrder(order: SiteOrder): { isValid: boolean; errors: string[] } {
+export function validateSiteOrder(order: SiteOrder): {
+  isValid: boolean;
+  errors: string[];
+} {
   const errors: string[] = [];
-  
+
   if (!order.externalOrderId) {
-    errors.push('Відсутній ID замовлення');
+    errors.push("Відсутній ID замовлення");
   }
-  
+
   if (!order.firstName && !order.lastName) {
-    errors.push('Відсутні ім\'я або прізвище клієнта');
+    errors.push("Відсутні ім'я або прізвище клієнта");
   }
-  
+
   if (!order.email && !order.phone) {
-    errors.push('Відсутні email або телефон клієнта');
+    errors.push("Відсутні email або телефон клієнта");
   }
-  
+
   if (!order.items || order.items.length === 0) {
-    errors.push('Відсутні товари в замовленні');
+    errors.push("Відсутні товари в замовленні");
   }
-  
+
   if (order.totalCost <= 0) {
-    errors.push('Некоректна сума замовлення');
+    errors.push("Некоректна сума замовлення");
   }
-  
+
   // Validate each item
   order.items?.forEach((item, index) => {
     if (!item.name) {
@@ -289,25 +309,30 @@ export function validateSiteOrder(order: SiteOrder): { isValid: boolean; errors:
       errors.push(`Некоректна кількість товару #${index + 1}`);
     }
   });
-  
+
   return {
     isValid: errors.length === 0,
-    errors
+    errors,
   };
 }
 
 // Розрахунок загальної вартості замовлення
 export function calculateOrderTotal(order: SiteOrder): number {
-  return order.items?.reduce((total, item) => {
-    return total + (item.cost * item.quantity);
-  }, 0) || 0;
+  return (
+    order.items?.reduce((total, item) => {
+      return total + item.cost * item.quantity;
+    }, 0) || 0
+  );
 }
 
 // Форматування валюти
-export function formatCurrency(amount: number, currency: string = 'UAH'): string {
-  return new Intl.NumberFormat('uk-UA', {
-    style: 'currency',
-    currency: currency === 'UAH' ? 'UAH' : 'UAH',
+export function formatCurrency(
+  amount: number,
+  currency: string = "UAH",
+): string {
+  return new Intl.NumberFormat("uk-UA", {
+    style: "currency",
+    currency: currency === "UAH" ? "UAH" : "UAH",
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
