@@ -280,7 +280,7 @@ export function createWebhookServer() {
 
   return (
     new Elysia()
-      // .use(historyRouter)
+      .use(historyRouter)
       .use(dlqRouter)
       // POST /webhook - прийом замовлень з сайту
       .post(

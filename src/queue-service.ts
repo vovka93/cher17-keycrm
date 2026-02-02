@@ -95,7 +95,14 @@ async function createNewOrder(
 
     const crmOrderData = convertSiteOrderToCRM(siteOrder);
     const orderResponse = await api.order.createNewOrder(crmOrderData);
-    const crmOrderId = String(orderResponse.id);
+
+    if (!orderResponse.id) {
+      await addStatusToHistory(orderId, "failed", orderResponse);
+      return;
+    }
+
+    const { id } = orderResponse;
+    const crmOrderId = String(id);
 
     // Зберігаємо зв'язок ID замовлення з CRM
     await redis.set(siteOrder.externalOrderId, crmOrderId);
@@ -108,7 +115,6 @@ async function createNewOrder(
       fullOrderData = await api.order.getOrderById(crmOrderId);
     } catch (fetchError) {
       console.warn(`⚠️ Не вдалося отримати повні дані замовлення:`, fetchError);
-      // Використовуємо базову відповідь, якщо повні дані недоступні
     }
 
     // Формуємо розширену відповідь для історії
@@ -200,12 +206,12 @@ export async function processOrder(orderData: string): Promise<boolean> {
 
       case 2:
         // Оновлення статусу на "Відправлено"
-        await updateExistingOrder(siteOrder, orderId, 8); // status_id: 8 = Sent
+        await updateExistingOrder(siteOrder, orderId, 9); // status_id: 9 = Sent
         break;
 
       case 3:
         // Оновлення статусу на "Доставлено"
-        await updateExistingOrder(siteOrder, orderId, 9); // status_id: 9 = Delivered
+        await updateExistingOrder(siteOrder, orderId, 21); // status_id: 21 = Delivered
         break;
 
       default:

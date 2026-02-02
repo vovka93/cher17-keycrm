@@ -1,5 +1,5 @@
 export const CONFIG = {
-  MAX_RETRIES: 5,
+  MAX_RETRIES: 2,
   INITIAL_BACKOFF: 1000, // 1 секунда
   MAX_BACKOFF: 60000, // 1 хвилина
   BACKOFF_MULTIPLIER: 2,
