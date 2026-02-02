@@ -92,13 +92,6 @@ export async function createOrUpdateOrderMapping(
 
     // Update history index (efficient O(log n) operation)
     await updateHistoryIndex(rowid, now);
-  }
-
-    const updatedData = JSON.stringify(existing);
-    await redis.set(REDIS_KEYS.ORDER_MAPPING(rowid), updatedData);
-
-    // Update history index (efficient O(log n) operation)
-    await updateHistoryIndex(rowid, now);
   } else {
     // Create new order mapping
     const newMapping: OrderMapping = {
