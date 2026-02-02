@@ -73,8 +73,10 @@ export async function createOrUpdateOrderMapping(
     const existing: OrderMapping = JSON.parse(existingData as string);
 
     // Add new status to history using efficient hash storage
-    // Only store CRM response in history for error states or retries, not for successful completion
-    const shouldStoreCrmInHistory = status === 'failed' || status === 'processing';
+    // Store CRM response for error states, retries, or if order ID is missing
+    const shouldStoreCrmInHistory = status === 'failed' || 
+      status === 'processing' || 
+      (crmResponse && !crmResponse.id);
     await addStatusToHistoryHash(rowid, status, shouldStoreCrmInHistory ? crmResponse : undefined);
     
     existing.current_status = status;
@@ -84,6 +86,13 @@ export async function createOrUpdateOrderMapping(
     if (crmResponse) {
       existing.crm_order = crmResponse;
     }
+
+    const updatedData = JSON.stringify(existing);
+    await redis.set(REDIS_KEYS.ORDER_MAPPING(rowid), updatedData);
+
+    // Update history index (efficient O(log n) operation)
+    await updateHistoryIndex(rowid, now);
+  }
 
     const updatedData = JSON.stringify(existing);
     await redis.set(REDIS_KEYS.ORDER_MAPPING(rowid), updatedData);
@@ -127,8 +136,10 @@ export async function addStatusToHistory(
   const existing = await getOrderMapping(rowid);
   if (!existing) return;
 
-  // Add status to history hash (only store CRM response for error states to avoid duplication)
-  const shouldStoreCrmInHistory = status === 'failed' || (errorMessage && errorMessage.length > 0);
+  // Add status to history hash (store CRM response for error states, or if order ID is missing)
+  const shouldStoreCrmInHistory = status === 'failed' || 
+    (errorMessage && errorMessage.length > 0) || 
+    (crmResponse && !crmResponse.id);
   await addStatusToHistoryHash(rowid, status, shouldStoreCrmInHistory ? crmResponse : undefined, errorMessage, retryCount);
   
   existing.current_status = status;
