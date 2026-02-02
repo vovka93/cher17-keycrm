@@ -281,10 +281,6 @@ export function validateSiteOrder(order: SiteOrder): {
     errors.push("Відсутній ID замовлення");
   }
 
-  if (!order.firstName && !order.lastName) {
-    errors.push("Відсутні ім'я або прізвище клієнта");
-  }
-
   if (!order.email && !order.phone) {
     errors.push("Відсутні email або телефон клієнта");
   }
