@@ -209,7 +209,6 @@ export function parseShippingAddress(
 } | null {
   if (!deliveryAddress) return null;
 
-  // Extract delivery service from method
   let service = deliveryMethod;
   if (deliveryMethod?.toLowerCase().includes("нова пошта")) {
     service = "Нова Пошта";
@@ -217,38 +216,53 @@ export function parseShippingAddress(
     service = "Укрпошта";
   }
 
-  // Parse address components
-  const addressParts = deliveryAddress.split(",").map((part) => part.trim());
+  const parts = deliveryAddress
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
 
   let city = "";
   let region = "";
   let zip = "";
   let receivePoint = "";
-  let secondaryLine = "";
+  let secondaryLineParts: string[] = [];
 
-  // Try to extract city (usually first part before comma or contains "м." or "вул.")
-  for (const part of addressParts) {
-    if (part.includes("м.") || (part.match(/^[А-Яа-яієїґ]+$/i) && !city)) {
-      city = part.replace(/^м\.\s*/, "").trim();
-    } else if (
-      part.includes("вул.") ||
-      part.includes("просп.") ||
-      part.includes("пров.")
-    ) {
-      secondaryLine = part;
-    } else if (part.includes("Відділення") || part.includes("Склад")) {
-      receivePoint = part;
-    } else if (part.match(/^\d{5}$/)) {
-      zip = part;
-    } else if (part.includes("обл.") || part.includes("область")) {
-      region = part;
+  // 1. Місто + область з першого сегмента
+  if (parts[0]) {
+    const regionMatch = parts[0].match(/\(([^)]+)\)/);
+    if (regionMatch) {
+      region = regionMatch[1];
     }
+
+    city = parts[0].replace(/\s*\(.*?\)\s*/, "").trim();
   }
 
-  // If no city found, use first non-empty part
-  if (!city && addressParts.length > 0) {
-    city = addressParts[0] || "";
+  // 2. Проходимо інші сегменти
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i];
+
+    // zip (UA або US)
+    if (/^\d{5}(-\d{4})?$/.test(part)) {
+      zip = part;
+      continue;
+    }
+
+    // якщо сегмент = місто (дубль) — ігноруємо
+    if (part.toLowerCase() === city.toLowerCase()) {
+      continue;
+    }
+
+    // receive point (ТРЦ, магазин, відділення і т.д.)
+    if (/відділення|трц|магазин|store|mall/i.test(part)) {
+      receivePoint = receivePoint ? `${receivePoint}, ${part}` : part;
+      continue;
+    }
+
+    // все інше — частина адреси
+    secondaryLineParts.push(part);
   }
+
+  const secondaryLine = secondaryLineParts.join(", ").trim();
 
   return {
     service,
