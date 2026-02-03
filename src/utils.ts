@@ -80,7 +80,7 @@ export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
               description: `Замовлення #${siteOrder.externalOrderId}`,
             },
           ],
-    discount_amount: discount,
+    total_discount: discount,
     // Add marketing data if available
     marketing: {
       utm_source: "website",
