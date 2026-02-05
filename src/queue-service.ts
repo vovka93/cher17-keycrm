@@ -6,6 +6,7 @@ import {
   calculateBackoff,
   convertSiteOrderToCRM,
   convertSiteOrderToPipelineCard,
+  createLeadDedupHash,
   validateSiteOrder,
   calculateOrderTotal,
 } from "./utils";
@@ -63,8 +64,25 @@ async function createPipelineCard(
   siteOrder: SiteOrder,
   orderId: string,
 ): Promise<void> {
+  let leadHashKey: string | null = null;
   try {
     console.log(`🎯 Створення картки воронки для замовлення ${orderId}...`);
+
+    const leadHash = createLeadDedupHash(siteOrder);
+    leadHashKey = REDIS_KEYS.LEAD_HASH(leadHash);
+    const existingLead = await redis.get(leadHashKey);
+
+    if (existingLead) {
+      const message = `♻️ Дубль ліда, пропускаємо створення картки для ${orderId}.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", {
+        message,
+        lead_hash: leadHash,
+      });
+      return;
+    }
+
+    await redis.set(leadHashKey, orderId);
 
     const crmPipelineData = convertSiteOrderToPipelineCard(siteOrder);
     const crmResponse =
@@ -77,6 +95,10 @@ async function createPipelineCard(
   } catch (error) {
     const errorMessage = `Помилка створення картки воронки: ${error instanceof Error ? error.message : error}`;
     console.error(`❌ ${errorMessage}`);
+
+    if (leadHashKey) {
+      await redis.del(leadHashKey);
+    }
 
     await addStatusToHistory(orderId, "failed", undefined, errorMessage);
     throw error;

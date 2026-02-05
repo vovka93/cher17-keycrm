@@ -17,4 +17,5 @@ export const REDIS_KEYS = {
   ORDER_STATUS_HISTORY: (orderId: string) => `order:status_history:${orderId}`, // Hash for status history
   RETRY_COUNT: (orderId: string) => `orders:retry:${orderId}`,
   RETRY_AT: (orderId: string) => `orders:retry_at:${orderId}`,
+  LEAD_HASH: (hash: string) => `leads:hash:${hash}`,
 };

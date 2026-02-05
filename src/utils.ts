@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { CONFIG } from "./config";
 import type { SiteOrder } from "./types";
 
@@ -86,12 +87,6 @@ export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
       utm_source: "website",
       utm_medium: "direct",
     },
-    custom_fields: [
-      {
-        uuid: "OR_1001",
-        value: discount ?? 0,
-      },
-    ].filter((field) => !!field.value),
   };
 }
 
@@ -346,4 +341,23 @@ export function formatCurrency(
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
+}
+
+export function createLeadDedupHash(order: SiteOrder): string {
+  const fullName = `${order.firstName} ${order.lastName}`.trim().toLowerCase();
+  const phone = formatPhoneNumber(order.phone ?? "").trim().toLowerCase();
+  const products = order.items
+    .map((item) => ({
+      name: item.name.trim().toLowerCase(),
+      quantity: item.quantity,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const payload = JSON.stringify({
+    fullName,
+    phone,
+    products,
+  });
+
+  return createHash("sha256").update(payload).digest("hex");
 }
