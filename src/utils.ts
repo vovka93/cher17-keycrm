@@ -101,34 +101,18 @@ export function convertSiteOrderToPipelineCard(order: SiteOrder) {
   const managerComment = [
     `📋 ЗАМОВЛЕННЯ #${order.externalOrderId}`,
     "",
-    `👤 Клієнт: ${order.firstName} ${order.lastName}`,
-    `📞 Телефон: ${formatPhoneNumber(order.phone)}`,
-    `📧 Email: ${order.email}`,
-    "",
-    `💰 Сума: ${order.totalCost} ${order.currency || "UAH"}`,
     `🚚 Доставка: ${order.deliveryMethod || "Не вказано"}`,
     `💳 Оплата: ${order.paymentMethod || "Не вказано"}`,
     "",
-    `📦 Товари (${order.items.length} шт.):`,
-    ...order.items.map(
-      (item, index) =>
-        `${index + 1}. ${item.name} (${item.quantity} шт. × ${item.cost} ${order.currency || "UAH"})`,
-    ),
-    "",
     `📍 Адреса доставки: ${order.deliveryAddress || "Не вказано"}`,
     order.additionalInfo ? `📝 Коментар: ${order.additionalInfo}` : "",
-    "",
-    `⏰ Час замовлення: ${orderDate.toLocaleString("uk-UA")}`,
-    `🔗 ID клієнта: ${order.externalCustomerId}`,
-    `📊 Статус оплати: ${order.paymentStatus === 1 ? "Оплачено" : "Не оплачено"}`,
-    `📈 Статус замовлення: ${order.statusDescription || "Невідомо"} (${order.orderStatus})`,
   ]
     .filter((line) => line !== "")
     .join("\n");
 
   return {
     title: `Замовлення #${order.externalOrderId}`,
-    pipeline_id: 3,
+    pipeline_id: 1,
     source_id: 2,
     communicate_at: orderDate.toISOString(),
     manager_comment: managerComment,
@@ -345,7 +329,9 @@ export function formatCurrency(
 
 export function createLeadDedupHash(order: SiteOrder): string {
   const fullName = `${order.firstName} ${order.lastName}`.trim().toLowerCase();
-  const phone = formatPhoneNumber(order.phone ?? "").trim().toLowerCase();
+  const phone = formatPhoneNumber(order.phone ?? "")
+    .trim()
+    .toLowerCase();
   const products = order.items
     .map((item) => ({
       name: item.name.trim().toLowerCase(),
