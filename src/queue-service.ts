@@ -112,13 +112,32 @@ async function createNewOrder(
   siteOrder: SiteOrder,
   orderId: string,
 ): Promise<void> {
+  let orderProcessedKey: string | null = null;
   try {
     console.log(`🛒 Створення замовлення в CRM для ${orderId}...`);
+
+    orderProcessedKey = REDIS_KEYS.ORDER_PROCESSED(orderId, siteOrder.orderStatus);
+    const existingOrder = await redis.get(orderProcessedKey);
+
+    if (existingOrder) {
+      const message = `♻️ Дубль замовлення, пропускаємо створення для ${orderId}.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", {
+        message,
+        orderId: existingOrder,
+      });
+      return;
+    }
+
+    await redis.set(orderProcessedKey, "processing");
 
     const crmOrderData = convertSiteOrderToCRM(siteOrder);
     const orderResponse = await api.order.createNewOrder(crmOrderData);
 
     if (!orderResponse.id) {
+      if (orderProcessedKey) {
+        await redis.del(orderProcessedKey);
+      }
       await addStatusToHistory(orderId, "failed", orderResponse);
       return;
     }
@@ -128,6 +147,7 @@ async function createNewOrder(
 
     // Зберігаємо зв'язок ID замовлення з CRM
     await redis.set(siteOrder.externalOrderId, crmOrderId);
+    await redis.set(orderProcessedKey!, crmOrderId);
 
     console.log(`📦 Замовлення створено в CRM з ID: ${crmOrderId}`);
 
@@ -152,6 +172,10 @@ async function createNewOrder(
     const errorMessage = `Помилка створення замовлення: ${error instanceof Error ? error.message : error}`;
     console.error(`❌ ${errorMessage}`);
 
+    if (orderProcessedKey) {
+      await redis.del(orderProcessedKey);
+    }
+
     await addStatusToHistory(orderId, "failed", undefined, errorMessage);
     throw error;
   }
@@ -165,6 +189,7 @@ async function updateExistingOrder(
   orderId: string,
   statusId: number,
 ): Promise<void> {
+  let orderProcessedKey: string | null = null;
   try {
     // Отримуємо CRM ID замовлення
     const crmOrderId = (await redis.get(siteOrder.externalOrderId)) as string;
@@ -172,6 +197,21 @@ async function updateExistingOrder(
     if (!crmOrderId) {
       throw new Error(`CRM ID не знайдено для замовлення ${orderId}`);
     }
+
+    orderProcessedKey = REDIS_KEYS.ORDER_PROCESSED(orderId, siteOrder.orderStatus);
+    const existingUpdate = await redis.get(orderProcessedKey);
+
+    if (existingUpdate) {
+      const message = `♻️ Дубль оновлення статусу, пропускаємо для ${orderId}.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", {
+        message,
+        statusId: existingUpdate,
+      });
+      return;
+    }
+
+    await redis.set(orderProcessedKey, String(statusId));
 
     console.log(
       `🔄 Оновлення статусу замовлення ${crmOrderId} на ${statusId}...`,
@@ -188,6 +228,10 @@ async function updateExistingOrder(
   } catch (error) {
     const errorMessage = `Помилка оновлення замовлення: ${error instanceof Error ? error.message : error}`;
     console.error(`❌ ${errorMessage}`);
+
+    if (orderProcessedKey) {
+      await redis.del(orderProcessedKey);
+    }
 
     await addStatusToHistory(orderId, "failed", undefined, errorMessage);
     throw error;
