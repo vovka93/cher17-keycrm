@@ -245,8 +245,21 @@ async function updateExistingOrder(
 export async function processOrder(orderData: string): Promise<boolean> {
   const siteOrder: SiteOrder = JSON.parse(orderData);
   const orderId = siteOrder.externalOrderId;
+  const lockKey = REDIS_KEYS.ORDER_LOCK(orderId);
+
+  let lockAcquired = false;
 
   try {
+    lockAcquired = (await redis.setnx(lockKey, "1")) === 1;
+    if (lockAcquired) {
+      await redis.expire(lockKey, 30);
+    }
+
+    if (!lockAcquired) {
+      console.log(`🔒 Замовлення ${orderId} вже обробляється іншим воркером, пропускаємо`);
+      return true;
+    }
+
     console.log(
       `🚀 Початок обробки замовлення ${orderId} (статус: ${siteOrder.orderStatus})`,
     );
@@ -300,6 +313,10 @@ export async function processOrder(orderData: string): Promise<boolean> {
     await addStatusToHistory(orderId, "failed", undefined, errorMessage);
 
     return false;
+  } finally {
+    if (lockAcquired) {
+      await redis.del(lockKey);
+    }
   }
 }
 
