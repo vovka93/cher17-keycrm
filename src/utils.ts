@@ -18,6 +18,7 @@ export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
     siteOrder.deliveryAddress,
     siteOrder.deliveryMethod,
   );
+  const isPaid = Number(siteOrder.paymentStatus) === 1;
   let discount =
     siteOrder.discount && siteOrder.discount > 0
       ? siteOrder.discount
@@ -64,7 +65,7 @@ export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
         }
       : undefined,
     payments:
-      siteOrder.paymentStatus === 1
+      isPaid
         ? [
             {
               payment_method: siteOrder.paymentMethod,

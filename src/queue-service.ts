@@ -17,6 +17,28 @@ import {
 
 const api = new SDK("https://openapi.keycrm.app/v1", Bun.env["KEYCRM_KEY"]);
 
+async function findExistingCrmOrderIdBySourceUuid(
+  sourceUuid: string,
+): Promise<string | null> {
+  try {
+    const res: any = await api.order.getOrdersBySourceUuid(sourceUuid);
+    const orders: any[] = Array.isArray(res?.data)
+      ? res.data
+      : Array.isArray(res?.orders)
+        ? res.orders
+        : Array.isArray(res)
+          ? res
+          : [];
+
+    const match = orders.find((o) => String(o?.source_uuid) === String(sourceUuid));
+    const id = match?.id;
+    return id != null ? String(id) : null;
+  } catch (e) {
+    // Якщо пошук не вдався - не блокуємо створення, просто йдемо далі
+    return null;
+  }
+}
+
 /**
  * Додавання замовлення в чергу обробки
  * Створює початковий запис в історії зі статусом 'pending'
@@ -68,11 +90,44 @@ async function createPipelineCard(
   try {
     console.log(`🎯 Створення картки воронки для замовлення ${orderId}...`);
 
+    // Оплачені замовлення не мають потрапляти в ліди
+    if (Number(siteOrder.paymentStatus) === 1) {
+      const message = `💡 Замовлення ${orderId} оплачене, пропускаємо створення ліда.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", { message });
+      return;
+    }
+
+    // Якщо замовлення вже існує в CRM, лід не створюємо
+    const existingCrmOrderId = (await redis.get(
+      siteOrder.externalOrderId,
+    )) as string | null;
+    if (existingCrmOrderId) {
+      const message = `💡 Замовлення ${orderId} вже існує в CRM (ID: ${existingCrmOrderId}), пропускаємо створення ліда.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", {
+        message,
+        orderId: existingCrmOrderId,
+      });
+      return;
+    }
+
+    const foundCrmOrderId = await findExistingCrmOrderIdBySourceUuid(orderId);
+    if (foundCrmOrderId) {
+      await redis.set(siteOrder.externalOrderId, foundCrmOrderId);
+      const message = `💡 Замовлення ${orderId} знайдено в CRM (ID: ${foundCrmOrderId}), пропускаємо створення ліда.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", {
+        message,
+        orderId: foundCrmOrderId,
+      });
+      return;
+    }
+
     const leadHash = createLeadDedupHash(siteOrder);
     leadHashKey = REDIS_KEYS.LEAD_HASH(leadHash);
-    const existingLead = await redis.get(leadHashKey);
-
-    if (existingLead) {
+    const acquired = (await redis.setnx(leadHashKey, orderId)) === 1;
+    if (!acquired) {
       const message = `♻️ Дубль ліда, пропускаємо створення картки для ${orderId}.`;
       console.log(message);
       await addStatusToHistory(orderId, "completed", {
@@ -81,8 +136,6 @@ async function createPipelineCard(
       });
       return;
     }
-
-    await redis.set(leadHashKey, orderId);
 
     const crmPipelineData = convertSiteOrderToPipelineCard(siteOrder);
     const crmResponse =
@@ -113,6 +166,7 @@ async function createNewOrder(
   orderId: string,
 ): Promise<void> {
   let orderProcessedKey: string | null = null;
+  let createLockKey: string | null = null;
   try {
     console.log(`🛒 Створення замовлення в CRM для ${orderId}...`);
 
@@ -127,6 +181,32 @@ async function createNewOrder(
         message,
         orderId: existingCrmOrderId,
       });
+      return;
+    }
+
+    // Якщо Redis мапінг загубився (падіння між create та set), спробуємо знайти по source_uuid в CRM
+    const foundCrmOrderId = await findExistingCrmOrderIdBySourceUuid(orderId);
+    if (foundCrmOrderId) {
+      await redis.set(siteOrder.externalOrderId, foundCrmOrderId);
+      const message = `♻️ Замовлення вже існує в CRM (ID: ${foundCrmOrderId}), відновили мапінг і пропускаємо створення для ${orderId}.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", {
+        message,
+        orderId: foundCrmOrderId,
+      });
+      return;
+    }
+
+    // Додатковий захист від дублювання створення (на випадок повторних вебхуків/ретраїв)
+    createLockKey = `orders:create_lock:${orderId}`;
+    const lockAcquired = (await redis.setnx(createLockKey, "1")) === 1;
+    if (lockAcquired) {
+      await redis.expire(createLockKey, 300);
+    }
+    if (!lockAcquired) {
+      const message = `🔒 Створення замовлення ${orderId} вже запущено, пропускаємо дубль.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", { message });
       return;
     }
 
@@ -188,6 +268,10 @@ async function createNewOrder(
 
     if (orderProcessedKey) {
       await redis.del(orderProcessedKey);
+    }
+
+    if (createLockKey) {
+      await redis.del(createLockKey);
     }
 
     await addStatusToHistory(orderId, "failed", undefined, errorMessage);
@@ -261,6 +345,9 @@ export async function processOrder(orderData: string): Promise<boolean> {
   const orderId = siteOrder.externalOrderId;
   const lockKey = REDIS_KEYS.ORDER_LOCK(orderId);
 
+  const orderStatus = Number(siteOrder.orderStatus);
+  const paymentStatus = Number(siteOrder.paymentStatus);
+
   let lockAcquired = false;
 
   try {
@@ -275,7 +362,7 @@ export async function processOrder(orderData: string): Promise<boolean> {
     }
 
     console.log(
-      `🚀 Початок обробки замовлення ${orderId} (статус: ${siteOrder.orderStatus})`,
+      `🚀 Початок обробки замовлення ${orderId} (статус: ${orderStatus}, оплата: ${paymentStatus})`,
     );
 
     // Оновлюємо статус на 'processing'
@@ -286,9 +373,9 @@ export async function processOrder(orderData: string): Promise<boolean> {
       orderStatus → 0/1/2/3 (Cart/New/Sent/Delivered)
       paymentStatus → 0/1 (Not paid/Paid)
     */
-    switch (siteOrder.orderStatus) {
+    switch (orderStatus) {
       case 0:
-        if (siteOrder.paymentStatus === 1) {
+        if (paymentStatus === 1) {
           // Оплачені замовлення не мають потрапляти в ліди
           await createNewOrder(siteOrder, orderId);
         } else {

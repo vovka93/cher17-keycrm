@@ -929,6 +929,14 @@ export class OrderService {
       undefined,
     );
   }
+  async getOrdersBySourceUuid(sourceUuid: string): Promise<Record<string, any>> {
+    const q = encodeURIComponent(sourceUuid);
+    return this.client.request(
+      "GET",
+      `/order?source_uuid=${q}&include=products.offer`,
+      undefined,
+    );
+  }
   async createNewOrder(body?: {
     source_id: number;
     source_uuid?: string;
