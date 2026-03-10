@@ -116,6 +116,20 @@ async function createNewOrder(
   try {
     console.log(`🛒 Створення замовлення в CRM для ${orderId}...`);
 
+    // Якщо CRM ID вже є в Redis, значить замовлення вже створено (навіть якщо подія прийшла з іншим orderStatus)
+    const existingCrmOrderId = (await redis.get(
+      siteOrder.externalOrderId,
+    )) as string | null;
+    if (existingCrmOrderId) {
+      const message = `♻️ Замовлення вже існує в CRM (ID: ${existingCrmOrderId}), пропускаємо створення для ${orderId}.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", {
+        message,
+        orderId: existingCrmOrderId,
+      });
+      return;
+    }
+
     orderProcessedKey = REDIS_KEYS.ORDER_PROCESSED(orderId, siteOrder.orderStatus);
     const existingOrder = await redis.get(orderProcessedKey);
 
@@ -274,8 +288,13 @@ export async function processOrder(orderData: string): Promise<boolean> {
     */
     switch (siteOrder.orderStatus) {
       case 0:
-        // Створення картки воронки продаж (лід)
-        await createPipelineCard(siteOrder, orderId);
+        if (siteOrder.paymentStatus === 1) {
+          // Оплачені замовлення не мають потрапляти в ліди
+          await createNewOrder(siteOrder, orderId);
+        } else {
+          // Створення картки воронки продаж (лід)
+          await createPipelineCard(siteOrder, orderId);
+        }
         break;
 
       case 1:
