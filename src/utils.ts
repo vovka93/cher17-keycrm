@@ -4,7 +4,14 @@ import type { SiteOrder } from "./types";
 
 const KYIV_TIME_ZONE = "Europe/Kyiv";
 
-function getKyivDateParts(input: number | string | Date) {
+function getKyivDateParts(input: number | string | Date): {
+  year: string;
+  month: string;
+  day: string;
+  hour: string;
+  minute: string;
+  second: string;
+} {
   const date = input instanceof Date ? input : new Date(input);
   const parts = new Intl.DateTimeFormat("sv-SE", {
     timeZone: KYIV_TIME_ZONE,
@@ -17,14 +24,19 @@ function getKyivDateParts(input: number | string | Date) {
     hour12: false,
   }).formatToParts(date);
 
-  const map = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  const map = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  ) as Record<string, string | undefined>;
+
   return {
-    year: map.year,
-    month: map.month,
-    day: map.day,
-    hour: map.hour,
-    minute: map.minute,
-    second: map.second,
+    year: map.year ?? "1970",
+    month: map.month ?? "01",
+    day: map.day ?? "01",
+    hour: map.hour ?? "00",
+    minute: map.minute ?? "00",
+    second: map.second ?? "00",
   };
 }
 
@@ -248,18 +260,20 @@ export function parseShippingAddress(
   let secondaryLineParts: string[] = [];
 
   // 1. Місто + область з першого сегмента
-  if (parts[0]) {
-    const regionMatch = parts[0].match(/\(([^)]+)\)/);
-    if (regionMatch) {
+  const firstPart = parts[0];
+  if (firstPart) {
+    const regionMatch = firstPart.match(/\(([^)]+)\)/);
+    if (regionMatch?.[1]) {
       region = regionMatch[1];
     }
 
-    city = parts[0].replace(/\s*\(.*?\)\s*/, "").trim();
+    city = firstPart.replace(/\s*\(.*?\)\s*/, "").trim();
   }
 
   // 2. Проходимо інші сегменти
   for (let i = 1; i < parts.length; i++) {
     const part = parts[i];
+    if (!part) continue;
 
     // zip (UA або US)
     if (/^\d{5}(-\d{4})?$/.test(part)) {

@@ -5,7 +5,12 @@ import { processOrder, handleFailedOrder } from "./queue-service";
 
 // Воркер обробки черги
 export async function processQueue(): Promise<void> {
+  let isProcessing = false;
+
   const processNextBatch = async () => {
+    if (isProcessing) return;
+    isProcessing = true;
+
     try {
       const orderData = await redis.lpop(REDIS_KEYS.PENDING_QUEUE);
 
@@ -37,6 +42,8 @@ export async function processQueue(): Promise<void> {
       if (!success) await handleFailedOrder(orderData as string);
     } catch (error) {
       console.error("Помилка в воркері черги:", error);
+    } finally {
+      isProcessing = false;
     }
   };
 

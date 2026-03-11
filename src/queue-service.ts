@@ -21,6 +21,10 @@ function shouldDelayLeadCreation(order: SiteOrder): boolean {
   return Number(order.orderStatus) === 0 && Number(order.paymentStatus) !== 1;
 }
 
+function getCrmOrderIdKey(orderId: string): string {
+  return REDIS_KEYS.CRM_ORDER_ID(orderId);
+}
+
 async function findExistingCrmOrderIdBySourceUuid(
   sourceUuid: string,
 ): Promise<string | null> {
@@ -83,12 +87,6 @@ export async function enqueueOrder(order: SiteOrder): Promise<void> {
 
     // Створюємо початковий запис в історії
     await createOrUpdateOrderMapping(order, "pending");
-    await addStatusToHistory(
-      order.externalOrderId,
-      "pending",
-      undefined,
-      `Створення ліда відкладено на ${Math.round(CONFIG.LEAD_DELAY_MS / 60000)} хвилин — чекаємо можливу оплату`,
-    );
 
     console.log(`⏳ Лід-кандидат ${order.externalOrderId} відкладено на ${Math.round(CONFIG.LEAD_DELAY_MS / 60000)} хвилин`);
     return;
@@ -123,7 +121,7 @@ async function createPipelineCard(
 
     // Якщо замовлення вже існує в CRM, лід не створюємо
     const existingCrmOrderId = (await redis.get(
-      siteOrder.externalOrderId,
+      getCrmOrderIdKey(siteOrder.externalOrderId),
     )) as string | null;
     if (existingCrmOrderId) {
       const message = `💡 Замовлення ${orderId} вже існує в CRM (ID: ${existingCrmOrderId}), пропускаємо створення ліда.`;
@@ -137,7 +135,7 @@ async function createPipelineCard(
 
     const foundCrmOrderId = await findExistingCrmOrderIdBySourceUuid(orderId);
     if (foundCrmOrderId) {
-      await redis.set(siteOrder.externalOrderId, foundCrmOrderId);
+      await redis.set(getCrmOrderIdKey(siteOrder.externalOrderId), foundCrmOrderId);
       const message = `💡 Замовлення ${orderId} знайдено в CRM (ID: ${foundCrmOrderId}), пропускаємо створення ліда.`;
       console.log(message);
       await addStatusToHistory(orderId, "completed", {
@@ -195,7 +193,7 @@ async function createNewOrder(
 
     // Якщо CRM ID вже є в Redis, значить замовлення вже створено (навіть якщо подія прийшла з іншим orderStatus)
     const existingCrmOrderId = (await redis.get(
-      siteOrder.externalOrderId,
+      getCrmOrderIdKey(siteOrder.externalOrderId),
     )) as string | null;
     if (existingCrmOrderId) {
       const message = `♻️ Замовлення вже існує в CRM (ID: ${existingCrmOrderId}), пропускаємо створення для ${orderId}.`;
@@ -210,7 +208,7 @@ async function createNewOrder(
     // Якщо Redis мапінг загубився (падіння між create та set), спробуємо знайти по source_uuid в CRM
     const foundCrmOrderId = await findExistingCrmOrderIdBySourceUuid(orderId);
     if (foundCrmOrderId) {
-      await redis.set(siteOrder.externalOrderId, foundCrmOrderId);
+      await redis.set(getCrmOrderIdKey(siteOrder.externalOrderId), foundCrmOrderId);
       const message = `♻️ Замовлення вже існує в CRM (ID: ${foundCrmOrderId}), відновили мапінг і пропускаємо створення для ${orderId}.`;
       console.log(message);
       await addStatusToHistory(orderId, "completed", {
@@ -247,6 +245,7 @@ async function createNewOrder(
     }
 
     await redis.set(orderProcessedKey, "processing");
+    await redis.expire(orderProcessedKey, 600);
 
     const crmOrderData = convertSiteOrderToCRM(siteOrder);
     const orderResponse = await api.order.createNewOrder(crmOrderData);
@@ -263,7 +262,7 @@ async function createNewOrder(
     const crmOrderId = String(id);
 
     // Зберігаємо зв'язок ID замовлення з CRM
-    await redis.set(siteOrder.externalOrderId, crmOrderId);
+    await redis.set(getCrmOrderIdKey(siteOrder.externalOrderId), crmOrderId);
     await redis.set(orderProcessedKey!, crmOrderId);
 
     console.log(`📦 Замовлення створено в CRM з ID: ${crmOrderId}`);
@@ -313,7 +312,7 @@ async function updateExistingOrder(
   let orderProcessedKey: string | null = null;
   try {
     // Отримуємо CRM ID замовлення
-    const crmOrderId = (await redis.get(siteOrder.externalOrderId)) as string;
+    const crmOrderId = (await redis.get(getCrmOrderIdKey(siteOrder.externalOrderId))) as string;
 
     if (!crmOrderId) {
       throw new Error(`CRM ID не знайдено для замовлення ${orderId}`);

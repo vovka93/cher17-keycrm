@@ -19,6 +19,7 @@ export const REDIS_KEYS = {
   RETRY_COUNT: (orderId: string) => `orders:retry:${orderId}`,
   RETRY_AT: (orderId: string) => `orders:retry_at:${orderId}`,
   LEAD_HASH: (hash: string) => `leads:hash:${hash}`,
+  CRM_ORDER_ID: (orderId: string) => `orders:crm_id:${orderId}`,
   ORDER_PROCESSED: (orderId: string, status: number) => `orders:processed:${orderId}:status_${status}`,
   ORDER_LOCK: (orderId: string) => `orders:lock:${orderId}`,
 };

@@ -7,7 +7,7 @@ test("print payment methods list", async () => {
   const res = await api.order.getPaginatedListOfPaymentMethods();
 
   console.table(
-    res.data.map((m) => ({
+    res.data.map((m: any) => ({
       id: m.id,
       alias: m.alias,
       name: m.name,
