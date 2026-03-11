@@ -80,6 +80,10 @@ export async function enqueueOrder(order: SiteOrder): Promise<void> {
 
   const orderData = JSON.stringify(order);
 
+  if (!shouldDelayLeadCreation(order)) {
+    await redis.del(REDIS_KEYS.RETRY_AT(order.externalOrderId));
+  }
+
   if (shouldDelayLeadCreation(order)) {
     const retryAt = Date.now() + CONFIG.LEAD_DELAY_MS;
     await redis.set(REDIS_KEYS.RETRY_AT(order.externalOrderId), retryAt.toString());
@@ -148,6 +152,9 @@ async function createPipelineCard(
     const leadHash = createLeadDedupHash(siteOrder);
     leadHashKey = REDIS_KEYS.LEAD_HASH(leadHash);
     const acquired = (await redis.setnx(leadHashKey, orderId)) === 1;
+    if (acquired) {
+      await redis.expire(leadHashKey, CONFIG.LEAD_HASH_TTL_SEC);
+    }
     if (!acquired) {
       const message = `♻️ Дубль ліда, пропускаємо створення картки для ${orderId}.`;
       console.log(message);
@@ -155,6 +162,23 @@ async function createPipelineCard(
         message,
         lead_hash: leadHash,
       });
+      return;
+    }
+
+    const crmMappingBeforeCreate = await redis.get(getCrmOrderIdKey(siteOrder.externalOrderId));
+    if (crmMappingBeforeCreate) {
+      const message = `💡 Перед створенням ліда вже з'явився CRM mapping (${crmMappingBeforeCreate}), пропускаємо.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", { message, orderId: crmMappingBeforeCreate });
+      return;
+    }
+
+    const sourceUuidOrderBeforeCreate = await findExistingCrmOrderIdBySourceUuid(orderId);
+    if (sourceUuidOrderBeforeCreate) {
+      await redis.set(getCrmOrderIdKey(siteOrder.externalOrderId), sourceUuidOrderBeforeCreate);
+      const message = `💡 Перед створенням ліда замовлення вже знайдено в CRM (${sourceUuidOrderBeforeCreate}), пропускаємо.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", { message, orderId: sourceUuidOrderBeforeCreate });
       return;
     }
 
@@ -222,12 +246,29 @@ async function createNewOrder(
     createLockKey = `orders:create_lock:${orderId}`;
     const lockAcquired = (await redis.setnx(createLockKey, "1")) === 1;
     if (lockAcquired) {
-      await redis.expire(createLockKey, 300);
+      await redis.expire(createLockKey, CONFIG.CREATE_LOCK_TTL_SEC);
     }
     if (!lockAcquired) {
       const message = `🔒 Створення замовлення ${orderId} вже запущено, пропускаємо дубль.`;
       console.log(message);
       await addStatusToHistory(orderId, "completed", { message });
+      return;
+    }
+
+    const crmMappingBeforeCreate = await redis.get(getCrmOrderIdKey(siteOrder.externalOrderId));
+    if (crmMappingBeforeCreate) {
+      const message = `♻️ Після взяття create-lock уже є CRM mapping (${crmMappingBeforeCreate}), створення не потрібне.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", { message, orderId: crmMappingBeforeCreate });
+      return;
+    }
+
+    const sourceUuidOrderBeforeCreate = await findExistingCrmOrderIdBySourceUuid(orderId);
+    if (sourceUuidOrderBeforeCreate) {
+      await redis.set(getCrmOrderIdKey(siteOrder.externalOrderId), sourceUuidOrderBeforeCreate);
+      const message = `♻️ Після взяття create-lock замовлення вже знайдено в CRM (${sourceUuidOrderBeforeCreate}), створення не потрібне.`;
+      console.log(message);
+      await addStatusToHistory(orderId, "completed", { message, orderId: sourceUuidOrderBeforeCreate });
       return;
     }
 
@@ -245,7 +286,7 @@ async function createNewOrder(
     }
 
     await redis.set(orderProcessedKey, "processing");
-    await redis.expire(orderProcessedKey, 600);
+    await redis.expire(orderProcessedKey, CONFIG.PROCESSED_MARKER_TTL_SEC);
 
     const crmOrderData = convertSiteOrderToCRM(siteOrder);
     const orderResponse = await api.order.createNewOrder(crmOrderData);
@@ -332,6 +373,7 @@ async function updateExistingOrder(
     }
 
     await redis.set(orderProcessedKey, String(statusId));
+    await redis.expire(orderProcessedKey, CONFIG.PROCESSED_MARKER_TTL_SEC);
 
     console.log(
       `🔄 Оновлення статусу замовлення ${crmOrderId} на ${statusId}...`,
@@ -375,7 +417,7 @@ export async function processOrder(orderData: string): Promise<boolean> {
   try {
     lockAcquired = (await redis.setnx(lockKey, "1")) === 1;
     if (lockAcquired) {
-      await redis.expire(lockKey, 30);
+      await redis.expire(lockKey, CONFIG.ORDER_LOCK_TTL_SEC);
     }
 
     if (!lockAcquired) {

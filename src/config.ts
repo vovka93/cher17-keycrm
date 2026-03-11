@@ -6,6 +6,10 @@ export const CONFIG = {
   WEBHOOK_PORT: 3000,
   PROCESSING_INTERVAL: 5000, // Перевірка черги кожні 5 секунд
   LEAD_DELAY_MS: 10 * 60 * 1000, // 10 хвилин перед створенням ліда
+  ORDER_LOCK_TTL_SEC: 5 * 60,
+  CREATE_LOCK_TTL_SEC: 15 * 60,
+  PROCESSED_MARKER_TTL_SEC: 15 * 60,
+  LEAD_HASH_TTL_SEC: 24 * 60 * 60,
 };
 
 export const REDIS_KEYS = {
