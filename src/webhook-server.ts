@@ -10,79 +10,120 @@ import {
   cleanHistory,
   getHistoryStats,
 } from "./order-mapping-service";
+import { renderHistoryPage } from "./history-ui";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import redis from "./redis";
 
 export function createWebhookServer() {
+  async function buildHistoryResponse(query: {
+    status?: string;
+    limit?: string;
+    page?: string;
+  }) {
+    const { status, limit, page } = query;
+    const parsedLimit = limit ? parseInt(limit) : 100;
+    const pageNumber = page ? parseInt(page) : 1;
+
+    let orders: OrderMapping[];
+    let totalCount: number;
+
+    if (status) {
+      orders = await getOrderMappingsByStatus(
+        status as OrderMapping["current_status"],
+        parsedLimit,
+      );
+      totalCount = orders.length;
+    } else if (page) {
+      const pageSize = 10;
+      orders = await getOrderHistory(pageNumber, pageSize);
+      totalCount = await getOrderHistoryCount();
+    } else {
+      orders = await getOrderHistoryLegacy(parsedLimit);
+      totalCount = orders.length;
+    }
+
+    if (page || (!limit && !status)) {
+      const pageSize = 10;
+      const totalPages = Math.ceil(totalCount / pageSize);
+      return {
+        success: true,
+        pagination: {
+          current_page: pageNumber,
+          per_page: pageSize,
+          total_count: totalCount,
+          total_pages: totalPages,
+          has_next: pageNumber < totalPages,
+          has_prev: pageNumber > 1,
+        },
+        orders: orders.map((order) => ({
+          _rowid: order._rowid,
+          site_order: order.site_order,
+          crm_order: order.crm_order,
+          status_history: order.status_history,
+          current_status: order.current_status,
+          created_at: order.created_at,
+          updated_at: order.updated_at,
+        })),
+      };
+    }
+
+    return {
+      success: true,
+      total: orders.length,
+      orders: orders.map((order) => ({
+        _rowid: order._rowid,
+        site_order: order.site_order,
+        crm_order: order.crm_order,
+        status_history: order.status_history,
+        current_status: order.current_status,
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+      })),
+    };
+  }
+
   // History router group
   const historyRouter = new Elysia({ prefix: "/history" })
+    .get("/", async ({ headers, query, set }) => {
+      const accept = headers.accept || "";
+      const wantsHtml = accept.includes("text/html") && query.format !== "json";
+
+      if (wantsHtml) {
+        set.headers["content-type"] = "text/html; charset=utf-8";
+        return renderHistoryPage();
+      }
+
+      try {
+        return await buildHistoryResponse(query);
+      } catch (error) {
+        console.error("Error fetching order history:", error);
+        return {
+          success: false,
+          error: "Failed to fetch order history",
+        };
+      }
+    },
+    {
+      query: t.Object({
+        status: t.Optional(
+          t.Union([
+            t.Literal("pending"),
+            t.Literal("processing"),
+            t.Literal("completed"),
+            t.Literal("failed"),
+          ]),
+        ),
+        limit: t.Optional(t.String()),
+        page: t.Optional(t.String()),
+        format: t.Optional(t.String()),
+      }),
+    })
     .get(
-      "/",
+      "/data",
       async ({ query }) => {
-        const { status, limit, page } = query;
-        const parsedLimit = limit ? parseInt(limit) : 100;
-        const pageNumber = page ? parseInt(page) : 1;
-
         try {
-          let orders: OrderMapping[];
-          let totalCount: number;
-
-          if (status) {
-            orders = await getOrderMappingsByStatus(
-              status as OrderMapping["current_status"],
-              parsedLimit,
-            );
-            totalCount = orders.length;
-          } else if (page) {
-            // Use pagination if page parameter is provided
-            const pageSize = 10;
-            orders = await getOrderHistory(pageNumber, pageSize);
-            totalCount = await getOrderHistoryCount();
-          } else {
-            // Legacy behavior - use limit
-            orders = await getOrderHistoryLegacy(parsedLimit);
-            totalCount = orders.length;
-          }
-
-          // For legacy response when using limit, for pagination response when using page
-          if (page || (!limit && !status)) {
-            const pageSize = 10;
-            const totalPages = Math.ceil(totalCount / pageSize);
-            return {
-              success: true,
-              pagination: {
-                current_page: pageNumber,
-                per_page: pageSize,
-                total_count: totalCount,
-                total_pages: totalPages,
-                has_next: pageNumber < totalPages,
-                has_prev: pageNumber > 1,
-              },
-              orders: orders.map((order) => ({
-                _rowid: order._rowid,
-                site_order: order.site_order,
-                crm_order: order.crm_order,
-                status_history: order.status_history,
-                current_status: order.current_status,
-                created_at: order.created_at,
-                updated_at: order.updated_at,
-              })),
-            };
-          } else {
-            // Legacy response format
-            return {
-              success: true,
-              total: orders.length,
-              orders: orders.map((order) => ({
-                _rowid: order._rowid,
-                site_order: order.site_order,
-                crm_order: order.crm_order,
-                status_history: order.status_history,
-                current_status: order.current_status,
-                created_at: order.created_at,
-                updated_at: order.updated_at,
-              })),
-            };
-          }
+          return await buildHistoryResponse(query);
         } catch (error) {
           console.error("Error fetching order history:", error);
           return {
@@ -103,9 +144,15 @@ export function createWebhookServer() {
           ),
           limit: t.Optional(t.String()),
           page: t.Optional(t.String()),
+          format: t.Optional(t.String()),
         }),
       },
     )
+    .get("/app.js", async ({ set }) => {
+      set.headers["content-type"] = "application/javascript; charset=utf-8";
+      const scriptPath = fileURLToPath(new URL("./history-app.js", import.meta.url));
+      return await readFile(scriptPath, "utf8");
+    })
     .get(
       "/:page",
       async ({ params, query }) => {
