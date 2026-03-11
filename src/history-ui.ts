@@ -68,6 +68,15 @@ export function renderHistoryPage() {
                 <option value="asc">↑ Старіші / менші</option>
               </select>
             </label>
+            <label>
+              <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">На сторінку</span>
+              <select id="pageSize" class="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-sm text-white focus:border-cyan-500">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </label>
           </div>
         </section>
 
@@ -94,6 +103,15 @@ export function renderHistoryPage() {
           <div class="flex flex-wrap gap-2 text-xs text-slate-400">
             <span class="rounded-full border border-slate-700 px-3 py-1">Клік по рядку → деталі</span>
             <span class="rounded-full border border-slate-700 px-3 py-1">Пошук працює по site + keycrm</span>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-3 border-b border-slate-800 bg-slate-950/30 px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div id="querySummary" class="text-xs text-slate-500">Server-side filter: none</div>
+          <div class="flex items-center gap-2">
+            <button id="prevPageButton" class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:border-cyan-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">← Назад</button>
+            <div id="pageIndicator" class="min-w-28 text-center text-sm text-slate-400">—</div>
+            <button id="nextPageButton" class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:border-cyan-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Вперед →</button>
           </div>
         </div>
 

@@ -1,6 +1,7 @@
 const state = {
   orders: [],
   filteredOrders: [],
+  pagination: null,
 };
 
 const statusTone = {
@@ -16,6 +17,11 @@ const el = {
   statusFilter: document.getElementById('statusFilter'),
   sortField: document.getElementById('sortField'),
   sortDirection: document.getElementById('sortDirection'),
+  pageSize: document.getElementById('pageSize'),
+  prevPageButton: document.getElementById('prevPageButton'),
+  nextPageButton: document.getElementById('nextPageButton'),
+  pageIndicator: document.getElementById('pageIndicator'),
+  querySummary: document.getElementById('querySummary'),
   reloadButton: document.getElementById('reloadButton'),
   statsCards: document.getElementById('statsCards'),
   tableWrap: document.getElementById('tableWrap'),
@@ -121,6 +127,46 @@ function collectSearchText(order) {
     ...items,
     ...history,
   ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function getCurrentPage() {
+  return Number(el.pageIndicator?.dataset.page || '1');
+}
+
+function setCurrentPage(page) {
+  if (el.pageIndicator) {
+    el.pageIndicator.dataset.page = String(page);
+  }
+}
+
+function debounce(fn, wait = 250) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), wait);
+  };
+}
+
+function renderPagination() {
+  const pagination = state.pagination;
+  if (!pagination) {
+    el.pageIndicator.textContent = 'Без пагінації';
+    el.prevPageButton.disabled = true;
+    el.nextPageButton.disabled = true;
+    return;
+  }
+
+  el.pageIndicator.textContent = `Сторінка ${pagination.current_page} / ${Math.max(pagination.total_pages, 1)}`;
+  el.prevPageButton.disabled = !pagination.has_prev;
+  el.nextPageButton.disabled = !pagination.has_next;
+  setCurrentPage(pagination.current_page);
+
+  const parts = [];
+  if (el.statusFilter.value !== 'all') parts.push(`status=${el.statusFilter.value}`);
+  if (el.searchInput.value.trim()) parts.push(`search=“${el.searchInput.value.trim()}”`);
+  parts.push(`per_page=${pagination.per_page}`);
+  parts.push(`total=${pagination.total_count}`);
+  el.querySummary.textContent = parts.join(' · ');
 }
 
 function renderStats() {
@@ -286,19 +332,13 @@ function renderTable() {
   });
 
   renderStats();
+  renderPagination();
 }
 
-function applyFilters() {
-  const search = el.searchInput.value.trim().toLowerCase();
-  const status = el.statusFilter.value;
+function applyClientSorting() {
+  const filtered = [...state.orders];
   const sortField = el.sortField.value;
   const sortDirection = el.sortDirection.value;
-
-  const filtered = state.orders.filter((order) => {
-    const matchesStatus = status === 'all' || order.current_status === status;
-    const matchesSearch = !search || collectSearchText(order).includes(search);
-    return matchesStatus && matchesSearch;
-  });
 
   filtered.sort((a, b) => {
     const left = getNestedValue(a, sortField);
@@ -321,24 +361,32 @@ function applyFilters() {
   renderTable();
 }
 
-async function loadHistory() {
+async function loadHistory(page = 1) {
   el.loadingState.classList.remove('hidden');
   el.tableWrap.classList.add('hidden');
   el.errorState.classList.add('hidden');
 
   try {
-    const response = await fetch('/history/data?limit=1000', { headers: { Accept: 'application/json' } });
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('pageSize', el.pageSize.value || '25');
+    if (el.statusFilter.value !== 'all') params.set('status', el.statusFilter.value);
+    const search = el.searchInput.value.trim();
+    if (search) params.set('search', search);
+
+    const response = await fetch(`/history/data?${params.toString()}`, { headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error('HTTP ' + response.status);
 
     const payload = await response.json();
     if (!payload.success) throw new Error(payload.error || 'Не вдалося отримати історію');
 
     state.orders = payload.orders || [];
+    state.pagination = payload.pagination || null;
     state.filteredOrders = [...state.orders];
 
     el.loadingState.classList.add('hidden');
     el.tableWrap.classList.remove('hidden');
-    applyFilters();
+    applyClientSorting();
   } catch (error) {
     el.loadingState.classList.add('hidden');
     el.errorState.textContent = 'Не вдалося завантажити історію: ' + (error?.message || error);
@@ -346,10 +394,16 @@ async function loadHistory() {
   }
 }
 
-[el.searchInput, el.statusFilter, el.sortField, el.sortDirection].forEach((node) => {
-  node.addEventListener('input', applyFilters);
-  node.addEventListener('change', applyFilters);
-});
-el.reloadButton.addEventListener('click', loadHistory);
+const debouncedReload = debounce(() => loadHistory(1), 300);
 
-loadHistory();
+el.searchInput.addEventListener('input', debouncedReload);
+el.statusFilter.addEventListener('change', () => loadHistory(1));
+el.pageSize.addEventListener('change', () => loadHistory(1));
+[el.sortField, el.sortDirection].forEach((node) => {
+  node.addEventListener('change', applyClientSorting);
+});
+el.prevPageButton.addEventListener('click', () => loadHistory(Math.max(1, getCurrentPage() - 1)));
+el.nextPageButton.addEventListener('click', () => loadHistory(getCurrentPage() + 1));
+el.reloadButton.addEventListener('click', () => loadHistory(getCurrentPage()));
+
+loadHistory(1);
