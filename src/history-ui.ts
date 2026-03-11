@@ -21,7 +21,7 @@ export function renderHistoryPage() {
           <p class="text-sm uppercase tracking-[0.24em] text-cyan-400/80">cher17</p>
           <h1 class="text-3xl font-bold tracking-tight text-white">Історія синхронізації замовлень</h1>
           <p class="mt-2 max-w-3xl text-sm text-slate-400">
-            Зручний перегляд того, що прийшло з сайту, і що повернув KeyCRM — з пошуком, фільтрами, сортуванням та деталями по кожному замовленню.
+            Зручний перегляд того, що прийшло з сайту, що повернув KeyCRM, і що зараз відкладено в черзі — з пошуком, фільтрами, сортуванням та деталями по кожному замовленню.
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400">
@@ -103,6 +103,7 @@ export function renderHistoryPage() {
           <div class="flex flex-wrap gap-2 text-xs text-slate-400">
             <span class="rounded-full border border-slate-700 px-3 py-1">Клік по рядку → деталі</span>
             <span class="rounded-full border border-slate-700 px-3 py-1">Пошук працює по site + keycrm</span>
+            <span class="rounded-full border border-slate-700 px-3 py-1">Delayed lead видно окремо</span>
           </div>
         </div>
 

@@ -44,6 +44,11 @@ export interface OrderMapping {
   current_status: 'pending' | 'processing' | 'completed' | 'failed';
   created_at: number;
   updated_at: number;
+  queue_meta?: {
+    retry_at?: number | null;
+    is_delayed_lead?: boolean;
+    delay_minutes?: number | null;
+  };
 }
 
 export interface WebhookPayload {

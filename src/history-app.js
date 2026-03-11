@@ -9,6 +9,7 @@ const statusTone = {
   processing: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
   completed: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
   failed: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+  delayed: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
   unknown: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
 };
 
@@ -102,6 +103,19 @@ function getLatestError(order) {
   return failedEntry.error_message || failedEntry.crm_response?.message || 'Помилка синхронізації';
 }
 
+function isDelayedLead(order) {
+  return Boolean(order.queue_meta?.is_delayed_lead);
+}
+
+function getDelayLabel(order) {
+  if (!isDelayedLead(order) || !order.queue_meta?.retry_at) return null;
+  return `Лід відкладено до ${formatDate(order.queue_meta.retry_at)}`;
+}
+
+function getDisplayStatus(order) {
+  return isDelayedLead(order) ? 'delayed' : (order.current_status || 'unknown');
+}
+
 function collectSearchText(order) {
   const site = order.site_order || {};
   const crm = order.crm_order || {};
@@ -172,22 +186,27 @@ function renderPagination() {
   if (el.searchInput.value.trim()) parts.push(`search=“${el.searchInput.value.trim()}”`);
   parts.push(`per_page=${pagination.per_page}`);
   parts.push(`total=${pagination.total_count}`);
+  const delayedCount = (state.orders || []).filter(isDelayedLead).length;
+  if (delayedCount) parts.push(`delayed_leads=${delayedCount}`);
   el.querySummary.textContent = parts.join(' · ');
 }
 
 function renderStats() {
   const orders = state.filteredOrders.length ? state.filteredOrders : state.orders;
   const byStatus = orders.reduce((acc, order) => {
-    acc[order.current_status] = (acc[order.current_status] || 0) + 1;
+    const key = getDisplayStatus(order);
+    acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
 
   const totalRevenue = orders.reduce((sum, order) => sum + Number(order.site_order?.totalCost || 0), 0);
   const failed = byStatus.failed || 0;
   const completed = byStatus.completed || 0;
+  const delayed = byStatus.delayed || 0;
 
   const cards = [
     { label: 'У записів', value: String(orders.length), hint: 'після фільтрів' },
+    { label: 'Delayed leads', value: String(delayed), hint: 'чекають оплату / апдейт' },
     { label: 'Completed', value: String(completed), hint: 'успішні синки' },
     { label: 'Failed', value: String(failed), hint: 'є що дебажити' },
     { label: 'Сума', value: formatMoney(totalRevenue, orders[0]?.site_order?.currency || 'UAH'), hint: 'по сайту' },
@@ -216,6 +235,8 @@ function renderTable() {
     const site = order.site_order || {};
     const crmId = getCrmOrderId(order);
     const latestError = getLatestError(order);
+    const displayStatus = getDisplayStatus(order);
+    const delayLabel = getDelayLabel(order);
     const itemNames = (site.items || []).map((item) => item.name).filter(Boolean);
     const itemPreview = itemNames.length ? itemNames.slice(0, 2).join(', ') : '—';
     const historyRows = (order.status_history || []).map((entry) => `
@@ -269,8 +290,8 @@ function renderTable() {
           <div class="mt-1 text-slate-400">${escapeHtml(getCrmSummary(order))}</div>
         </td>
         <td class="px-4 py-4 align-top">
-          <span class="rounded-full border px-3 py-1 text-xs font-medium ${statusTone[order.current_status] || statusTone.unknown}">${escapeHtml(order.current_status)}</span>
-          ${latestError ? `<div class="mt-2 text-xs text-rose-300">${escapeHtml(compactText(latestError, 80))}</div>` : '<div class="mt-2 text-xs text-slate-500">Без свіжих помилок</div>'}
+          <span class="rounded-full border px-3 py-1 text-xs font-medium ${statusTone[displayStatus] || statusTone.unknown}">${escapeHtml(displayStatus)}</span>
+          ${delayLabel ? `<div class="mt-2 text-xs text-violet-300">${escapeHtml(delayLabel)}</div>` : latestError ? `<div class="mt-2 text-xs text-rose-300">${escapeHtml(compactText(latestError, 80))}</div>` : '<div class="mt-2 text-xs text-slate-500">Без свіжих помилок</div>'}
         </td>
         <td class="px-4 py-4 align-top text-slate-300">${escapeHtml(formatDate(order.updated_at))}</td>
       </tr>
@@ -282,6 +303,7 @@ function renderTable() {
               <dl class="mt-3 grid gap-3 sm:grid-cols-2">
                 <div><dt class="text-xs uppercase tracking-wide text-slate-500">Customer ID</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.externalCustomerId || '—')}</dd></div>
                 <div><dt class="text-xs uppercase tracking-wide text-slate-500">Статус сайту</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.statusDescription || site.status || '—')}</dd></div>
+                <div><dt class="text-xs uppercase tracking-wide text-slate-500">Логіка черги</dt><dd class="mt-1 text-slate-200">${escapeHtml(delayLabel || 'Без відкладення')}</dd></div>
                 <div><dt class="text-xs uppercase tracking-wide text-slate-500">Доставка</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.deliveryAddress || '—')}</dd></div>
                 <div><dt class="text-xs uppercase tracking-wide text-slate-500">Додаткова інфо</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.additionalInfo || '—')}</dd></div>
               </dl>

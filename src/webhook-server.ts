@@ -19,7 +19,16 @@ export function createWebhookServer() {
   const DEFAULT_PAGE_SIZE = 10;
   const MAX_PAGE_SIZE = 100;
 
-  function normalizeOrder(order: OrderMapping) {
+  async function normalizeOrder(order: OrderMapping) {
+    const retryAtRaw = await redis.get(REDIS_KEYS.RETRY_AT(order._rowid));
+    const retryAt = retryAtRaw ? Number(retryAtRaw) : null;
+    const isDelayedLead = Boolean(
+      retryAt &&
+      retryAt > Date.now() &&
+      Number(order.site_order?.orderStatus) === 0 &&
+      Number(order.site_order?.paymentStatus) !== 1,
+    );
+
     return {
       _rowid: order._rowid,
       site_order: order.site_order,
@@ -28,6 +37,11 @@ export function createWebhookServer() {
       current_status: order.current_status,
       created_at: order.created_at,
       updated_at: order.updated_at,
+      queue_meta: {
+        retry_at: retryAt,
+        is_delayed_lead: isDelayedLead,
+        delay_minutes: isDelayedLead && retryAt ? Math.max(0, Math.ceil((retryAt - Date.now()) / 60000)) : null,
+      },
     };
   }
 
@@ -146,7 +160,7 @@ export function createWebhookServer() {
           has_next: pageNumber < totalPages,
           has_prev: pageNumber > 1,
         },
-        orders: orders.map(normalizeOrder),
+        orders: await Promise.all(orders.map(normalizeOrder)),
       };
     }
 
@@ -157,7 +171,7 @@ export function createWebhookServer() {
         status: status || null,
       },
       total: orders.length,
-      orders: orders.map(normalizeOrder),
+      orders: await Promise.all(orders.map(normalizeOrder)),
     };
   }
 
@@ -281,15 +295,7 @@ export function createWebhookServer() {
               has_next: pageNumber < totalPages,
               has_prev: pageNumber > 1,
             },
-            orders: orders.map((order) => ({
-              _rowid: order._rowid,
-              site_order: order.site_order,
-              crm_order: order.crm_order,
-              status_history: order.status_history,
-              current_status: order.current_status,
-              created_at: order.created_at,
-              updated_at: order.updated_at,
-            })),
+            orders: await Promise.all(orders.map(normalizeOrder)),
           };
         } catch (error) {
           console.error("Error fetching paginated order history:", error);
