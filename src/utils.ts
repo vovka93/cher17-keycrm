@@ -2,6 +2,49 @@ import { createHash } from "crypto";
 import { CONFIG } from "./config";
 import type { SiteOrder } from "./types";
 
+const KYIV_TIME_ZONE = "Europe/Kyiv";
+
+function getKyivDateParts(input: number | string | Date) {
+  const date = input instanceof Date ? input : new Date(input);
+  const parts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: KYIV_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const map = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  return {
+    year: map.year,
+    month: map.month,
+    day: map.day,
+    hour: map.hour,
+    minute: map.minute,
+    second: map.second,
+  };
+}
+
+export function formatDateTimeKyiv(input: number | string | Date): string {
+  const { year, month, day, hour, minute, second } = getKyivDateParts(input);
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
+export function formatIsoKyiv(input: number | string | Date): string {
+  const date = input instanceof Date ? input : new Date(input);
+  const utcMs = date.getTime();
+  const kyivAsUtcMs = new Date(formatDateTimeKyiv(date).replace(" ", "T") + "Z").getTime();
+  const offsetMinutes = Math.round((kyivAsUtcMs - utcMs) / 60000);
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const abs = Math.abs(offsetMinutes);
+  const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+  const mm = String(abs % 60).padStart(2, "0");
+  return `${formatDateTimeKyiv(date).replace(" ", "T")}${sign}${hh}:${mm}`;
+}
+
 // Розрахунок затримки з exponential backoff
 export function calculateBackoff(retryCount: number): number {
   const backoff = Math.min(
@@ -27,10 +70,7 @@ export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
     source_id: 2, // ID джерела (сайт)
     source_uuid: siteOrder.externalOrderId,
     buyer_comment: siteOrder.additionalInfo || undefined,
-    ordered_at: new Date(siteOrder.date)
-      .toISOString()
-      .replace("T", " ")
-      .substring(0, 19),
+    ordered_at: formatDateTimeKyiv(siteOrder.date),
     buyer: {
       full_name: `${siteOrder.firstName} ${siteOrder.lastName}`.trim(),
       email: siteOrder.email,
@@ -115,7 +155,7 @@ export function convertSiteOrderToPipelineCard(order: SiteOrder) {
     title: `Замовлення #${order.externalOrderId}`,
     pipeline_id: 1,
     source_id: 2,
-    communicate_at: orderDate.toISOString(),
+    communicate_at: formatIsoKyiv(orderDate),
     manager_comment: managerComment,
 
     contact: {

@@ -324,10 +324,18 @@ export function createWebhookServer() {
           formatted: {
             total: stats.total,
             oldestRecord: stats.oldestRecord
-              ? new Date(stats.oldestRecord).toISOString()
+              ? new Intl.DateTimeFormat("uk-UA", {
+                  dateStyle: "short",
+                  timeStyle: "medium",
+                  timeZone: "Europe/Kyiv",
+                }).format(new Date(stats.oldestRecord))
               : null,
             newestRecord: stats.newestRecord
-              ? new Date(stats.newestRecord).toISOString()
+              ? new Intl.DateTimeFormat("uk-UA", {
+                  dateStyle: "short",
+                  timeStyle: "medium",
+                  timeZone: "Europe/Kyiv",
+                }).format(new Date(stats.newestRecord))
               : null,
             byStatus: stats.byStatus,
           },

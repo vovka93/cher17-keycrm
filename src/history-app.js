@@ -31,11 +31,17 @@ const el = {
   resultsLabel: document.getElementById('resultsLabel'),
 };
 
+const KYIV_TIME_ZONE = 'Europe/Kyiv';
+
 function formatDate(value) {
   if (!value) return '—';
   const date = new Date(Number(value));
   if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('uk-UA', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+  return new Intl.DateTimeFormat('uk-UA', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: KYIV_TIME_ZONE,
+  }).format(date);
 }
 
 function formatMoney(value, currency = 'UAH') {
