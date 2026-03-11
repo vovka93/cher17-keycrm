@@ -17,6 +17,10 @@ import {
 
 const api = new SDK("https://openapi.keycrm.app/v1", Bun.env["KEYCRM_KEY"]);
 
+function shouldDelayLeadCreation(order: SiteOrder): boolean {
+  return Number(order.orderStatus) === 0 && Number(order.paymentStatus) !== 1;
+}
+
 async function findExistingCrmOrderIdBySourceUuid(
   sourceUuid: string,
 ): Promise<string | null> {
@@ -71,6 +75,25 @@ export async function enqueueOrder(order: SiteOrder): Promise<void> {
   }
 
   const orderData = JSON.stringify(order);
+
+  if (shouldDelayLeadCreation(order)) {
+    const retryAt = Date.now() + CONFIG.LEAD_DELAY_MS;
+    await redis.set(REDIS_KEYS.RETRY_AT(order.externalOrderId), retryAt.toString());
+    await redis.rpush(REDIS_KEYS.PROCESSING_QUEUE, orderData);
+
+    // Створюємо початковий запис в історії
+    await createOrUpdateOrderMapping(order, "pending");
+    await addStatusToHistory(
+      order.externalOrderId,
+      "pending",
+      undefined,
+      `Створення ліда відкладено на ${Math.round(CONFIG.LEAD_DELAY_MS / 60000)} хвилин — чекаємо можливу оплату`,
+    );
+
+    console.log(`⏳ Лід-кандидат ${order.externalOrderId} відкладено на ${Math.round(CONFIG.LEAD_DELAY_MS / 60000)} хвилин`);
+    return;
+  }
+
   await redis.rpush(REDIS_KEYS.PENDING_QUEUE, orderData);
 
   // Створюємо початковий запис в історії

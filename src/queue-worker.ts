@@ -17,7 +17,10 @@ export async function processQueue(): Promise<void> {
         const siteOrder: SiteOrder = JSON.parse(processingOrder as string);
         const orderId = siteOrder.externalOrderId;
         const retryAtStr = await redis.get(REDIS_KEYS.RETRY_AT(orderId));
-        if (!retryAtStr) return;
+        if (!retryAtStr) {
+          console.log(`ℹ️ Відкладена/ретрай задача ${orderId} більше не актуальна, пропускаємо`);
+          return;
+        }
 
         const retryAt = parseInt(retryAtStr as string);
         if (Date.now() < retryAt) {

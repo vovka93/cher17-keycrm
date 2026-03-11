@@ -5,6 +5,7 @@ export const CONFIG = {
   BACKOFF_MULTIPLIER: 2,
   WEBHOOK_PORT: 3000,
   PROCESSING_INTERVAL: 5000, // Перевірка черги кожні 5 секунд
+  LEAD_DELAY_MS: 10 * 60 * 1000, // 10 хвилин перед створенням ліда
 };
 
 export const REDIS_KEYS = {
