@@ -11,8 +11,7 @@ import {
   getHistoryStats,
 } from "./order-mapping-service";
 import { renderHistoryPage } from "./history-ui";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import historyAppScript from "./history-app.js" with { type: "text" };
 import redis from "./redis";
 
 export function createWebhookServer() {
@@ -233,10 +232,9 @@ export function createWebhookServer() {
         }),
       },
     )
-    .get("/app.js", async ({ set }) => {
+    .get("/app.js", ({ set }) => {
       set.headers["content-type"] = "application/javascript; charset=utf-8";
-      const scriptPath = fileURLToPath(new URL("./history-app.js", import.meta.url));
-      return await readFile(scriptPath, "utf8");
+      return historyAppScript;
     })
     .get(
       "/:page",
