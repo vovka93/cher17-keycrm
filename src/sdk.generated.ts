@@ -1362,8 +1362,33 @@ export class PipelinesService {
       undefined,
     );
   }
-  async getPaginatedListOfPipelinesCards(): Promise<Record<string, any>> {
-    return this.client.request("GET", "/pipelines/cards", undefined);
+  async getPaginatedListOfPipelinesCards(query?: {
+    limit?: number;
+    page?: number;
+    include?: string;
+    filter?: Record<string, string | number | boolean | undefined | null>;
+  }): Promise<Record<string, any>> {
+    const params = new URLSearchParams();
+
+    if (query?.limit != null) {
+      params.set("limit", String(query.limit));
+    }
+    if (query?.page != null) {
+      params.set("page", String(query.page));
+    }
+    if (query?.include) {
+      params.set("include", query.include);
+    }
+    if (query?.filter) {
+      for (const [key, value] of Object.entries(query.filter)) {
+        if (value == null) continue;
+        params.set(`filter[${key}]`, String(value));
+      }
+    }
+
+    const suffix = params.toString();
+    const path = suffix ? `/pipelines/cards?${suffix}` : "/pipelines/cards";
+    return this.client.request("GET", path, undefined);
   }
   async createNewPipelineCard(body?: {
     title?: string;

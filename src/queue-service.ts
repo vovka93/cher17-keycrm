@@ -7,15 +7,20 @@ import {
   convertSiteOrderToCRM,
   convertSiteOrderToPipelineCard,
   createLeadDedupHash,
+  formatPhoneNumber,
   validateSiteOrder,
   calculateOrderTotal,
 } from "./utils";
 import {
   createOrUpdateOrderMapping,
   addStatusToHistory,
+  getOrderMapping,
 } from "./order-mapping-service";
 
 const api = new SDK("https://openapi.keycrm.app/v1", Bun.env["KEYCRM_KEY"]);
+const DUPLICATE_LEAD_STATUS_ID = 45;
+const LEAD_SEARCH_PAGE_SIZE = 50;
+const LEAD_SEARCH_MAX_PAGES = 5;
 
 function shouldDelayLeadCreation(order: SiteOrder): boolean {
   return Number(order.orderStatus) === 0 && Number(order.paymentStatus) !== 1;
@@ -45,6 +50,127 @@ async function findExistingCrmOrderIdBySourceUuid(
     // Якщо пошук не вдався - не блокуємо створення, просто йдемо далі
     return null;
   }
+}
+
+function normalizeDigits(value?: string | null): string {
+  return (value ?? "").replace(/\D/g, "");
+}
+
+function normalizeEmail(value?: string | null): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function getPipelineCardIdFromCrmResponse(crmResponse: any): string | null {
+  if (!crmResponse || typeof crmResponse !== "object") return null;
+  const id = crmResponse.id;
+  const hasPipelineCardShape =
+    crmResponse.contact_id != null ||
+    crmResponse.contact?.id != null ||
+    crmResponse.target_type != null;
+  if (!hasPipelineCardShape || id == null) return null;
+  return String(id);
+}
+
+async function findDuplicateLeadCardByApi(
+  siteOrder: SiteOrder,
+  orderId: string,
+): Promise<any | null> {
+  const orderRef = String(orderId).toLowerCase();
+  const targetPhone = normalizeDigits(formatPhoneNumber(siteOrder.phone ?? ""));
+  const targetEmail = normalizeEmail(siteOrder.email);
+
+  for (let page = 1; page <= LEAD_SEARCH_MAX_PAGES; page++) {
+    const response = await api.pipelines.getPaginatedListOfPipelinesCards({
+      limit: LEAD_SEARCH_PAGE_SIZE,
+      page,
+      include: "contact.client,status",
+    });
+    const cards: any[] = Array.isArray(response?.data)
+      ? response.data
+      : Array.isArray(response)
+        ? response
+        : [];
+
+    if (cards.length === 0) {
+      return null;
+    }
+
+    const matched = cards.find((card) => {
+      if (!card || card.id == null) return false;
+
+      const targetType = String(card.target_type ?? "").toLowerCase();
+      if (targetType === "order") return false;
+
+      const title = String(card.title ?? "").toLowerCase();
+      const managerComment = String(card.manager_comment ?? "").toLowerCase();
+      const byOrderRef = orderRef.length > 0 &&
+        (title.includes(orderRef) || managerComment.includes(orderRef));
+
+      const contactPhone = normalizeDigits(
+        card.contact?.phone ?? card.contact?.client?.phone ?? "",
+      );
+      const contactEmail = normalizeEmail(
+        card.contact?.email ?? card.contact?.client?.email ?? "",
+      );
+      const byPhone = targetPhone.length > 0 && contactPhone === targetPhone;
+      const byEmail = targetEmail.length > 0 && contactEmail === targetEmail;
+
+      return byOrderRef || byPhone || byEmail;
+    });
+
+    if (matched) {
+      return matched;
+    }
+
+    if (cards.length < LEAD_SEARCH_PAGE_SIZE) {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+async function moveDuplicateLeadToPaidStatus(
+  siteOrder: SiteOrder,
+  orderId: string,
+): Promise<void> {
+  if (Number(siteOrder.paymentStatus) !== 1) {
+    return;
+  }
+
+  // Спочатку пробуємо знайти лід із локального mapping для цього замовлення.
+  const existingMapping = await getOrderMapping(orderId);
+  const mappedCardId = getPipelineCardIdFromCrmResponse(existingMapping?.crm_order);
+
+  let leadCard: any | null = null;
+  if (mappedCardId) {
+    leadCard = await api.pipelines.getPipelinesCard(mappedCardId);
+  } else {
+    leadCard = await findDuplicateLeadCardByApi(siteOrder, orderId);
+  }
+
+  if (!leadCard || leadCard.id == null) {
+    console.log(`ℹ️ Для оплаченого замовлення ${orderId} не знайдено дубль-лід.`);
+    return;
+  }
+
+  const leadCardId = String(leadCard.id);
+  const currentStatusId = Number(leadCard.status_id);
+
+  if (currentStatusId === DUPLICATE_LEAD_STATUS_ID) {
+    console.log(
+      `ℹ️ Лід-дубль ${leadCardId} для замовлення ${orderId} вже має status_id=${DUPLICATE_LEAD_STATUS_ID}.`,
+    );
+    return;
+  }
+
+  await api.pipelines.updatePipelinesCard(leadCardId, {
+    status_id: DUPLICATE_LEAD_STATUS_ID,
+  });
+
+  console.log(
+    `✅ Лід-дубль ${leadCardId} переведено у status_id=${DUPLICATE_LEAD_STATUS_ID} для замовлення ${orderId}.`,
+  );
 }
 
 /**
@@ -214,6 +340,10 @@ async function createNewOrder(
   let createLockKey: string | null = null;
   try {
     console.log(`🛒 Створення замовлення в CRM для ${orderId}...`);
+
+    if (Number(siteOrder.paymentStatus) === 1) {
+      await moveDuplicateLeadToPaidStatus(siteOrder, orderId);
+    }
 
     // Якщо CRM ID вже є в Redis, значить замовлення вже створено (навіть якщо подія прийшла з іншим orderStatus)
     const existingCrmOrderId = (await redis.get(
