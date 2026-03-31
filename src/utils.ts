@@ -67,6 +67,10 @@ export function calculateBackoff(retryCount: number): number {
   return backoff + Math.random() * 1000;
 }
 
+function getItemSku(item: SiteOrder["items"][number]) {
+  return item.sku?.trim() || String(item.externalItemId ?? "").trim();
+}
+
 // Конвертація замовлення з сайту в формат CRM
 export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
   const shippingData = parseShippingAddress(
@@ -90,7 +94,7 @@ export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
     },
     products: siteOrder.items.map((item) => ({
       name: item.name,
-      sku: item.externalItemId.toString(),
+      sku: getItemSku(item),
       price: item.cost,
       quantity: item.quantity,
       picture: item.imageUrl,
@@ -177,7 +181,7 @@ export function convertSiteOrderToPipelineCard(order: SiteOrder) {
     },
 
     products: order.items.map((item) => ({
-      sku: String(item.externalItemId),
+      sku: getItemSku(item),
       name: item.name,
       price: item.cost,
       quantity: item.quantity,

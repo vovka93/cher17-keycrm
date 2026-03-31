@@ -52,6 +52,7 @@ export function createWebhookServer() {
       item.name,
       item.category,
       item.description,
+      item.sku,
       item.externalItemId,
     ]);
     const historyBits = (order.status_history || []).flatMap((entry) => [

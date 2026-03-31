@@ -19,7 +19,8 @@ export interface SiteOrder {
   deliveryAddress: string;
   additionalInfo: string;
   items: Array<{
-    externalItemId: number;
+    externalItemId?: number;
+    sku?: string;
     name: string;
     category: string;
     quantity: number;
