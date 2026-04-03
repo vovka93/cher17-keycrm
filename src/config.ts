@@ -5,11 +5,16 @@ export const CONFIG = {
   BACKOFF_MULTIPLIER: 2,
   WEBHOOK_PORT: 3000,
   PROCESSING_INTERVAL: 5000, // Перевірка черги кожні 5 секунд
+  FISCALIZATION_PROCESSING_INTERVAL: 10000,
   LEAD_DELAY_MS: 10 * 60 * 1000, // 10 хвилин перед створенням ліда
   ORDER_LOCK_TTL_SEC: 5 * 60,
   CREATE_LOCK_TTL_SEC: 15 * 60,
   PROCESSED_MARKER_TTL_SEC: 15 * 60,
   LEAD_HASH_TTL_SEC: 24 * 60 * 60,
+  FISCALIZATION_WATCH_TTL_SEC: 48 * 60 * 60,
+  FISCALIZATION_MAX_RETRIES: 30,
+  FISCALIZATION_INITIAL_BACKOFF_MS: 30 * 1000,
+  FISCALIZATION_MAX_BACKOFF_MS: 15 * 60 * 1000,
 };
 
 export const REDIS_KEYS = {
@@ -24,7 +29,13 @@ export const REDIS_KEYS = {
   RETRY_AT: (orderId: string) => `orders:retry_at:${orderId}`,
   LEAD_HASH: (hash: string) => `leads:hash:${hash}`,
   CRM_ORDER_ID: (orderId: string) => `orders:crm_id:${orderId}`,
+  CRM_ORDER_SITE_ORDER_ID: (crmOrderId: string) => `orders:site_order_id_by_crm:${crmOrderId}`,
   ORDER_PROCESSED: (orderId: string, status: number) => `orders:processed:${orderId}:status_${status}`,
   ORDER_PAID_STATUS_SYNCED: (orderId: string) => `orders:paid_status_synced:${orderId}`,
+  FISCALIZATION_QUEUE: "orders:fiscalization:queue",
+  FISCALIZATION_WATCH: (crmOrderId: string) => `orders:fiscalization:watch:${crmOrderId}`,
+  FISCALIZATION_DONE: (crmOrderId: string) => `orders:fiscalization:done:${crmOrderId}`,
+  FISCALIZATION_RETRY_COUNT: (crmOrderId: string) => `orders:fiscalization:retry:${crmOrderId}`,
+  FISCALIZATION_RETRY_AT: (crmOrderId: string) => `orders:fiscalization:retry_at:${crmOrderId}`,
   ORDER_LOCK: (orderId: string) => `orders:lock:${orderId}`,
 };

@@ -1,5 +1,6 @@
 import { createWebhookServer } from "./webhook-server";
 import { processQueue } from "./queue-worker";
+import { processFiscalizationQueue } from "./fiscalization-worker";
 
 const app = createWebhookServer();
 
@@ -8,3 +9,4 @@ console.log(
 );
 
 processQueue();
+processFiscalizationQueue();

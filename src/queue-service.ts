@@ -434,6 +434,7 @@ async function createNewOrder(
 
     // Зберігаємо зв'язок ID замовлення з CRM
     await redis.set(getCrmOrderIdKey(siteOrder.externalOrderId), crmOrderId);
+    await redis.set(REDIS_KEYS.CRM_ORDER_SITE_ORDER_ID(crmOrderId), siteOrder.externalOrderId);
     await redis.set(orderProcessedKey!, crmOrderId);
 
     console.log(`📦 Замовлення створено в CRM з ID: ${crmOrderId}`);

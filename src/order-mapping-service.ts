@@ -1,11 +1,11 @@
 import redis from "./redis";
 import { REDIS_KEYS } from "./config";
-import type { SiteOrder, OrderMapping } from "./types";
+import type { SiteOrder, OrderMapping, OrderStatusHistoryEntry } from "./types";
 
 // Helper function to efficiently store status history in Redis hash
 async function addStatusToHistoryHash(
   rowid: string,
-  status: OrderMapping["current_status"],
+  status: OrderStatusHistoryEntry["status"],
   crmResponse?: any,
   errorMessage?: string,
   retryCount?: number,
@@ -129,7 +129,7 @@ export async function createOrUpdateOrderMapping(
 
 export async function addStatusToHistory(
   rowid: string,
-  status: OrderMapping["current_status"],
+  status: OrderStatusHistoryEntry["status"],
   crmResponse?: any,
   errorMessage?: string,
   retryCount?: number,
@@ -143,7 +143,9 @@ export async function addStatusToHistory(
     (crmResponse && !crmResponse.id);
   await addStatusToHistoryHash(rowid, status, shouldStoreCrmInHistory ? crmResponse : undefined, errorMessage, retryCount);
   
-  existing.current_status = status;
+  if (["pending", "processing", "completed", "failed"].includes(status)) {
+    existing.current_status = status as OrderMapping["current_status"];
+  }
   existing.updated_at = Date.now();
 
   // Update CRM data if provided

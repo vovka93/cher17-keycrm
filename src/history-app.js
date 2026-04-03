@@ -10,6 +10,17 @@ const statusTone = {
   completed: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
   failed: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
   delayed: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
+  fiscalization_webhook_received: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+  fiscalization_watch_started: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
+  fiscalization_watch_exists: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
+  fiscalization_poll_checked: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  fiscalization_watch_retry: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  fiscalization_moved_to_bas: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  fiscalization_stop_status_changed: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+  fiscalization_watch_timeout: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+  fiscalization_watch_error: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+  fiscalization_skip_done: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+  fiscalization_ignored_status: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
   unknown: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
 };
 
@@ -119,6 +130,28 @@ function compactText(value, max = 120) {
   const str = String(value ?? '').replace(/\s+/g, ' ').trim();
   if (!str) return '—';
   return str.length > max ? str.slice(0, max - 1) + '…' : str;
+}
+
+function prettifyHistoryStatus(status) {
+  const labels = {
+    pending: 'pending',
+    processing: 'processing',
+    completed: 'completed',
+    failed: 'failed',
+    fiscalization_webhook_received: 'webhook отримано',
+    fiscalization_watch_started: 'watch запущено',
+    fiscalization_watch_exists: 'watch вже існує',
+    fiscalization_poll_checked: 'poll перевірено',
+    fiscalization_watch_retry: 'watch retry',
+    fiscalization_moved_to_bas: 'передано в BAS',
+    fiscalization_stop_status_changed: 'watch зупинено',
+    fiscalization_watch_timeout: 'watch timeout',
+    fiscalization_watch_error: 'помилка watch',
+    fiscalization_skip_done: 'вже передано',
+    fiscalization_ignored_status: 'статус проігноровано',
+  };
+
+  return labels[status] || status || 'unknown';
 }
 
 function getCrmOrderId(order) {
@@ -300,9 +333,9 @@ function renderTable() {
     const itemPreview = itemNames.length ? itemNames.slice(0, 2).join(', ') : '—';
     const historyRows = (order.status_history || []).map((entry) => `
       <tr class="border-b border-slate-800/60 last:border-b-0">
-        <td class="px-3 py-2"><span class="rounded-full border px-2 py-1 text-xs ${statusTone[entry.status] || statusTone.unknown}">${escapeHtml(entry.status)}</span></td>
+        <td class="px-3 py-2"><span class="rounded-full border px-2 py-1 text-xs ${statusTone[entry.status] || statusTone.unknown}">${escapeHtml(prettifyHistoryStatus(entry.status))}</span></td>
         <td class="px-3 py-2 text-slate-300">${escapeHtml(formatDate(entry.date))}</td>
-        <td class="px-3 py-2 text-slate-400">${escapeHtml(compactText(entry.error_message || entry.crm_response?.message || entry.crm_response?.status || '—', 120))}</td>
+        <td class="px-3 py-2 text-slate-400">${escapeHtml(compactText(entry.error_message || entry.crm_response?.message || entry.crm_response?.status || entry.crm_response?.fiscal_status || '—', 120))}</td>
         <td class="px-3 py-2 text-slate-400">${escapeHtml(entry.retry_count ?? '—')}</td>
       </tr>
     `).join('');

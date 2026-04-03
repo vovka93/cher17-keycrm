@@ -14,6 +14,7 @@ import {
 import { HistoryPage } from "./history-ui.tsx";
 import historyAppScript from "./history-app.js" with { type: "text" };
 import redis from "./redis";
+import { handleFiscalizationWebhook } from "./fiscalization-service";
 
 export function createWebhookServer() {
   const HISTORY_SEARCH_LIMIT = 1000;
@@ -461,17 +462,50 @@ export function createWebhookServer() {
         },
       )
 
+      .post(
+        "/fiscalization",
+        async ({ body, set }) => {
+          try {
+            const result = await handleFiscalizationWebhook(body as any);
+            set.status = 200;
+            return {
+              ...result,
+            };
+          } catch (error) {
+            console.error("Помилка обробки fiscalization webhook:", error);
+            set.status = 400;
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : "Invalid fiscalization webhook",
+            };
+          }
+        },
+        {
+          body: t.Object({
+            event: t.Optional(t.String()),
+            context: t.Object({
+              id: t.Union([t.String(), t.Number()]),
+              source_uuid: t.Optional(t.Union([t.String(), t.Null()])),
+              status_id: t.Optional(t.Union([t.String(), t.Number()])),
+              fiscal_status: t.Optional(t.Union([t.String(), t.Null()])),
+            }, { additionalProperties: true }),
+          }, { additionalProperties: true }),
+        },
+      )
+
       // GET /health - статус черг
       .get("/health", async () => {
         const pendingCount = await redis.llen(REDIS_KEYS.PENDING_QUEUE);
         const processingCount = await redis.llen(REDIS_KEYS.PROCESSING_QUEUE);
         const dlqCount = await redis.llen(REDIS_KEYS.DEAD_LETTER_QUEUE);
+        const fiscalizationCount = await redis.llen(REDIS_KEYS.FISCALIZATION_QUEUE);
 
         return {
           status: "healthy",
           queues: {
             pending: pendingCount,
             processing: processingCount,
+            fiscalization: fiscalizationCount,
             deadLetter: dlqCount,
           },
         };
