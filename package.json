@@ -8,13 +8,21 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/node": "^25.2.0"
+    "@types/node": "^25.2.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
     "@elysiajs/html": "latest",
-    "elysia": "^1.4.22"
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "elysia": "^1.4.22",
+    "lucide-react": "^1.7.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwind-merge": "^3.5.0"
   }
 }
