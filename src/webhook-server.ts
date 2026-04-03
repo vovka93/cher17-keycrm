@@ -1,4 +1,5 @@
 import { Elysia, t } from "elysia";
+import { html } from "@elysiajs/html";
 import { CONFIG, REDIS_KEYS } from "./config";
 import type { SiteOrder, OrderMapping } from "./types";
 import { enqueueOrder } from "./queue-service";
@@ -10,7 +11,7 @@ import {
   cleanHistory,
   getHistoryStats,
 } from "./order-mapping-service";
-import { renderHistoryPage } from "./history-ui";
+import { HistoryPage } from "./history-ui.tsx";
 import historyAppScript from "./history-app.js" with { type: "text" };
 import redis from "./redis";
 
@@ -183,8 +184,7 @@ export function createWebhookServer() {
       const wantsHtml = accept.includes("text/html") && query.format !== "json";
 
       if (wantsHtml) {
-        set.headers["content-type"] = "text/html; charset=utf-8";
-        return renderHistoryPage();
+        return HistoryPage();
       }
 
       try {
@@ -425,6 +425,7 @@ export function createWebhookServer() {
 
   return (
     new Elysia()
+      .use(html())
       .use(historyRouter)
       .use(dlqRouter)
       // POST /webhook - прийом замовлень з сайту
