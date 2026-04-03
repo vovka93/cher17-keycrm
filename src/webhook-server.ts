@@ -19,6 +19,25 @@ export function createWebhookServer() {
   const HISTORY_SEARCH_LIMIT = 1000;
   const DEFAULT_PAGE_SIZE = 10;
   const MAX_PAGE_SIZE = 100;
+  const HISTORY_BASIC_AUTH_USERNAME = Bun.env["HISTORY_USERNAME"] || "dev";
+  const HISTORY_BASIC_AUTH_PASSWORD = Bun.env["HISTORY_PASSWORD"] || "dev";
+
+  function isAuthorizedHistoryRequest(headers: Record<string, string | undefined>) {
+    const authorization = headers.authorization || headers.Authorization;
+    if (!authorization || !authorization.startsWith("Basic ")) {
+      return false;
+    }
+
+    try {
+      const encoded = authorization.slice("Basic ".length);
+      const decoded = Buffer.from(encoded, "base64").toString("utf8");
+      const [username, ...rest] = decoded.split(":");
+      const password = rest.join(":");
+      return username === HISTORY_BASIC_AUTH_USERNAME && password === HISTORY_BASIC_AUTH_PASSWORD;
+    } catch {
+      return false;
+    }
+  }
 
   async function normalizeOrder(order: OrderMapping) {
     const retryAtRaw = await redis.get(REDIS_KEYS.RETRY_AT(order._rowid));
@@ -180,6 +199,12 @@ export function createWebhookServer() {
   // History router group
   const historyRouter = new Elysia({ prefix: "/history" })
     .get("/", async ({ headers, query, set }) => {
+      if (!isAuthorizedHistoryRequest(headers)) {
+        set.status = 401;
+        set.headers["www-authenticate"] = 'Basic realm="cher17-history"';
+        return "Unauthorized";
+      }
+
       const accept = headers.accept || "";
       const wantsHtml = accept.includes("text/html") && query.format !== "json";
 
@@ -218,7 +243,16 @@ export function createWebhookServer() {
     })
     .get(
       "/data",
-      async ({ query }) => {
+      async ({ headers, query, set }) => {
+        if (!isAuthorizedHistoryRequest(headers)) {
+          set.status = 401;
+          set.headers["www-authenticate"] = 'Basic realm="cher17-history"';
+          return {
+            success: false,
+            error: "Unauthorized",
+          };
+        }
+
         try {
           return await buildHistoryResponse(query);
         } catch (error) {
@@ -248,13 +282,28 @@ export function createWebhookServer() {
         }),
       },
     )
-    .get("/app.js", ({ set }) => {
+    .get("/app.js", ({ headers, set }) => {
+      if (!isAuthorizedHistoryRequest(headers)) {
+        set.status = 401;
+        set.headers["www-authenticate"] = 'Basic realm="cher17-history"';
+        return "Unauthorized";
+      }
+
       set.headers["content-type"] = "application/javascript; charset=utf-8";
       return historyAppScript;
     })
     .get(
       "/:page",
-      async ({ params, query }) => {
+      async ({ headers, params, query, set }) => {
+        if (!isAuthorizedHistoryRequest(headers)) {
+          set.status = 401;
+          set.headers["www-authenticate"] = 'Basic realm="cher17-history"';
+          return {
+            success: false,
+            error: "Unauthorized",
+          };
+        }
+
         const { page } = params;
         const { status } = query;
         const pageNumber = parseInt(page);
@@ -323,7 +372,16 @@ export function createWebhookServer() {
         }),
       },
     )
-    .get("/stats", async () => {
+    .get("/stats", async ({ headers, set }) => {
+      if (!isAuthorizedHistoryRequest(headers)) {
+        set.status = 401;
+        set.headers["www-authenticate"] = 'Basic realm="cher17-history"';
+        return {
+          success: false,
+          error: "Unauthorized",
+        };
+      }
+
       try {
         const stats = await getHistoryStats();
         return {
@@ -356,7 +414,16 @@ export function createWebhookServer() {
         };
       }
     })
-    .get("/clean", async ({ set }) => {
+    .get("/clean", async ({ headers, set }) => {
+      if (!isAuthorizedHistoryRequest(headers)) {
+        set.status = 401;
+        set.headers["www-authenticate"] = 'Basic realm="cher17-history"';
+        return {
+          success: false,
+          error: "Unauthorized",
+        };
+      }
+
       try {
         const result = await cleanHistory();
 
