@@ -530,6 +530,27 @@ async function updateExistingOrder(
   }
 }
 
+async function syncPaidStatusOnce(
+  siteOrder: SiteOrder,
+  orderId: string,
+): Promise<void> {
+  const paidStatusSyncKey = REDIS_KEYS.ORDER_PAID_STATUS_SYNCED(orderId);
+  const alreadySynced = await redis.get(paidStatusSyncKey);
+
+  if (alreadySynced) {
+    const message = `💡 Paid status для замовлення ${orderId} вже синхронізували раніше, повторний апдейт не потрібен.`;
+    console.log(message);
+    await addStatusToHistory(orderId, "completed", {
+      message,
+      statusId: Number(alreadySynced),
+    });
+    return;
+  }
+
+  await updateExistingOrder(siteOrder, orderId, 4);
+  await redis.set(paidStatusSyncKey, "4");
+}
+
 /**
  * Основна функція обробки замовлення
  * Розподіляє обробку залежно від типу статусу замовлення
@@ -584,19 +605,21 @@ export async function processOrder(orderData: string): Promise<boolean> {
         break;
 
       case 2:
-        // Оновлення статусу на "Відправлено"
-        await updateExistingOrder(siteOrder, orderId, 9); // status_id: 9 = Sent
+        // Статус "Відправлено" більше не синхронізуємо в CRM автоматично.
         break;
 
       case 3:
-        // Оновлення статусу на "Доставлено"
-        await updateExistingOrder(siteOrder, orderId, 21); // status_id: 21 = Delivered
+        // Статус "Доставлено" більше не синхронізуємо в CRM автоматично.
         break;
 
       default:
         throw new Error(
           `Невідомий статус замовлення: ${siteOrder.orderStatus}`,
         );
+    }
+
+    if (orderStatus > 1 && paymentStatus === 1) {
+      await syncPaidStatusOnce(siteOrder, orderId);
     }
 
     // Очищуємо лічильники повторних спроб

@@ -25,5 +25,6 @@ export const REDIS_KEYS = {
   LEAD_HASH: (hash: string) => `leads:hash:${hash}`,
   CRM_ORDER_ID: (orderId: string) => `orders:crm_id:${orderId}`,
   ORDER_PROCESSED: (orderId: string, status: number) => `orders:processed:${orderId}:status_${status}`,
+  ORDER_PAID_STATUS_SYNCED: (orderId: string) => `orders:paid_status_synced:${orderId}`,
   ORDER_LOCK: (orderId: string) => `orders:lock:${orderId}`,
 };
