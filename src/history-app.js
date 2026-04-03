@@ -288,17 +288,20 @@ function renderStats() {
   const avgOrder = orders.length ? totalRevenue / orders.length : 0;
 
   const cards = [
-    { label: 'Записів', value: String(orders.length), hint: 'видно зараз' },
-    { label: 'Completed', value: String(completed), hint: 'успішно оброблено' },
-    { label: 'Processing', value: String(processing), hint: 'в роботі зараз' },
-    { label: 'Failed', value: String(failed), hint: 'потребують уваги' },
-    { label: 'Delayed leads', value: String(delayed), hint: 'очікують повторну обробку' },
-    { label: 'Середній чек', value: formatMoney(avgOrder, orders[0]?.site_order?.currency || 'UAH'), hint: 'по поточному списку' },
+    { label: 'Записів', value: String(orders.length), hint: 'видно зараз', icon: '📦' },
+    { label: 'Completed', value: String(completed), hint: 'успішно оброблено', icon: '✅' },
+    { label: 'Processing', value: String(processing), hint: 'в роботі зараз', icon: '⚙️' },
+    { label: 'Failed', value: String(failed), hint: 'потребують уваги', icon: '🚨' },
+    { label: 'Delayed leads', value: String(delayed), hint: 'очікують повторну обробку', icon: '⏳' },
+    { label: 'Середній чек', value: formatMoney(avgOrder, orders[0]?.site_order?.currency || 'UAH'), hint: 'по поточному списку', icon: '💸' },
   ];
 
   el.statsCards.innerHTML = cards.map((card) => `
-    <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-      <div class="text-[11px] uppercase tracking-[0.2em] text-slate-500">${escapeHtml(card.label)}</div>
+    <section class="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/90 to-slate-950/80 p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="text-[11px] uppercase tracking-[0.2em] text-slate-500">${escapeHtml(card.label)}</div>
+        <div class="text-base">${escapeHtml(card.icon)}</div>
+      </div>
       <div class="mt-2 text-xl font-semibold text-white sm:text-2xl">${escapeHtml(card.value)}</div>
       <div class="mt-1 text-xs leading-5 text-slate-500">${escapeHtml(card.hint)}</div>
     </section>
@@ -366,54 +369,58 @@ function renderTable() {
         <td class="px-4 py-4 align-top">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <div class="font-semibold text-white">#${escapeHtml(site.externalOrderId || order._rowid)}</div>
+              <div class="flex items-center gap-2 font-semibold text-white"><span class="text-base">📦</span><span>#${escapeHtml(site.externalOrderId || order._rowid)}</span></div>
               <div class="mt-1 text-xs text-slate-500 mono">rowid: ${escapeHtml(order._rowid)}</div>
             </div>
             <span class="rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusTone[displayStatus] || statusTone.unknown}">${escapeHtml(displayStatus)}</span>
           </div>
-          <div class="mt-2 text-xs text-slate-400">Створено на сайті: ${escapeHtml(formatDate(site.date))}</div>
+          <div class="mt-2 text-xs text-slate-400">🗓️ Створено на сайті: ${escapeHtml(formatDate(site.date))}</div>
         </td>
         <td class="px-4 py-4 align-top">
-          <div class="font-medium text-slate-100">${escapeHtml(customerName)}</div>
-          <div class="mt-1 text-slate-300">${escapeHtml(site.phone || '—')}</div>
-          <div class="mt-1 text-xs text-slate-500">${escapeHtml(site.email || '—')}</div>
+          <div class="font-medium text-slate-100">👤 ${escapeHtml(customerName)}</div>
+          <div class="mt-1 text-slate-300">📞 ${escapeHtml(site.phone || '—')}</div>
+          <div class="mt-1 text-xs text-slate-500">✉️ ${escapeHtml(site.email || '—')}</div>
         </td>
         <td class="px-4 py-4 align-top">
-          <div class="text-slate-200">${escapeHtml(compactText(itemPreview, 64))}</div>
+          <div class="text-slate-200">🧾 ${escapeHtml(compactText(itemPreview, 64))}</div>
           <div class="mt-1 text-xs text-slate-500">${escapeHtml(itemCount)} позицій</div>
         </td>
         <td class="px-4 py-4 align-top">
-          <div class="font-medium text-slate-100">${escapeHtml(formatMoney(site.totalCost, site.currency || 'UAH'))}</div>
-          <div class="mt-1 text-slate-300">${escapeHtml(siteStatus)}</div>
-          <div class="mt-1 text-xs text-slate-500">${escapeHtml(paymentDelivery)}</div>
+          <div class="font-medium text-slate-100">💰 ${escapeHtml(formatMoney(site.totalCost, site.currency || 'UAH'))}</div>
+          <div class="mt-1 text-slate-300">🏷️ ${escapeHtml(siteStatus)}</div>
+          <div class="mt-1 text-xs text-slate-500">🚚 ${escapeHtml(paymentDelivery)}</div>
         </td>
         <td class="px-4 py-4 align-top">
-          <div class="font-medium text-slate-100">${escapeHtml(crmId || '—')}</div>
+          <div class="font-medium text-slate-100">🏢 ${escapeHtml(crmId || '—')}</div>
           <div class="mt-1 text-slate-400">${escapeHtml(getCrmSummary(order))}</div>
         </td>
         <td class="px-4 py-4 align-top">
-          ${delayLabel ? `<div class="text-xs text-violet-300">${escapeHtml(delayLabel)}</div>` : latestError ? `<div class="text-xs text-rose-300">${escapeHtml(compactText(latestError, 88))}</div>` : '<div class="text-xs text-slate-500">Без свіжих помилок</div>'}
+          ${delayLabel ? `<div class="text-xs text-violet-300">⏳ ${escapeHtml(delayLabel)}</div>` : latestError ? `<div class="text-xs text-rose-300">🚨 ${escapeHtml(compactText(latestError, 88))}</div>` : '<div class="text-xs text-slate-500">🫥 Без свіжих помилок</div>'}
         </td>
         <td class="px-4 py-4 align-top text-slate-300">
-          <div>${escapeHtml(formatDate(order.updated_at))}</div>
-          <div class="mt-1 text-xs text-slate-500">${escapeHtml(formatDate(order.created_at))}</div>
+          <div>🕒 ${escapeHtml(formatDate(order.updated_at))}</div>
+          <div class="mt-1 text-xs text-slate-500">створено: ${escapeHtml(formatDate(order.created_at))}</div>
         </td>
       </tr>
       <tr id="row-${index}" class="hidden bg-slate-900/40">
         <td colspan="7" class="px-4 pb-5 pt-1">
-          <div class="grid gap-4 lg:grid-cols-2">
-            <section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <h3 class="text-sm font-semibold text-white">Дані з сайту</h3>
-              <dl class="mt-3 grid gap-3 sm:grid-cols-2">
-                <div><dt class="text-xs uppercase tracking-wide text-slate-500">Customer ID</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.externalCustomerId || '—')}</dd></div>
-                <div><dt class="text-xs uppercase tracking-wide text-slate-500">Статус сайту</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.statusDescription || site.status || '—')}</dd></div>
-                <div><dt class="text-xs uppercase tracking-wide text-slate-500">Логіка черги</dt><dd class="mt-1 text-slate-200">${escapeHtml(delayLabel || 'Без відкладення')}</dd></div>
-                <div><dt class="text-xs uppercase tracking-wide text-slate-500">Доставка</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.deliveryAddress || '—')}</dd></div>
-                <div><dt class="text-xs uppercase tracking-wide text-slate-500">Додаткова інфо</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.additionalInfo || '—')}</dd></div>
+          <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <section class="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-950/80 to-slate-900/80 p-4 shadow-[0_20px_50px_-30px_rgba(59,130,246,0.45)]">
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-sm font-semibold text-white">🧭 Дані з сайту</h3>
+                <span class="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300">source</span>
+              </div>
+              <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">👤 Customer ID</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.externalCustomerId || '—')}</dd></div>
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🏷️ Статус сайту</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.statusDescription || site.status || '—')}</dd></div>
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">⏳ Логіка черги</dt><dd class="mt-1 text-slate-200">${escapeHtml(delayLabel || 'Без відкладення')}</dd></div>
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🚚 Доставка</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.deliveryAddress || '—')}</dd></div>
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:col-span-2"><dt class="text-[11px] uppercase tracking-wide text-slate-500">📝 Додаткова інфо</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.additionalInfo || '—')}</dd></div>
               </dl>
-              <div class="mt-4 overflow-hidden rounded-xl border border-slate-800">
+              <div class="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+                <div class="border-b border-slate-800 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">🧾 Товари в замовленні</div>
                 <table class="min-w-full divide-y divide-slate-800 text-sm">
-                  <thead class="bg-slate-900/70 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <thead class="bg-slate-900/80 text-left text-[11px] uppercase tracking-wide text-slate-500">
                     <tr>
                       <th class="px-3 py-2">Товар</th>
                       <th class="px-3 py-2">Категорія</th>
@@ -426,15 +433,19 @@ function renderTable() {
               </div>
             </section>
 
-            <section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <h3 class="text-sm font-semibold text-white">Відповідь KeyCRM + історія статусів</h3>
-              <dl class="mt-3 grid gap-3 sm:grid-cols-2">
-                <div><dt class="text-xs uppercase tracking-wide text-slate-500">CRM ID</dt><dd class="mt-1 text-slate-200">${escapeHtml(crmId || '—')}</dd></div>
-                <div><dt class="text-xs uppercase tracking-wide text-slate-500">Оновлено</dt><dd class="mt-1 text-slate-200">${escapeHtml(formatDate(order.updated_at))}</dd></div>
+            <section class="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-950/80 to-slate-900/80 p-4 shadow-[0_20px_50px_-30px_rgba(16,185,129,0.35)]">
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-sm font-semibold text-white">🏢 KeyCRM + історія</h3>
+                <span class="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300">crm</span>
+              </div>
+              <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🆔 CRM ID</dt><dd class="mt-1 text-slate-200">${escapeHtml(crmId || '—')}</dd></div>
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🕒 Оновлено</dt><dd class="mt-1 text-slate-200">${escapeHtml(formatDate(order.updated_at))}</dd></div>
               </dl>
-              <div class="mt-4 overflow-hidden rounded-xl border border-slate-800">
+              <div class="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+                <div class="border-b border-slate-800 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">📜 Історія статусів</div>
                 <table class="min-w-full divide-y divide-slate-800 text-sm">
-                  <thead class="bg-slate-900/70 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <thead class="bg-slate-900/80 text-left text-[11px] uppercase tracking-wide text-slate-500">
                     <tr>
                       <th class="px-3 py-2">Статус</th>
                       <th class="px-3 py-2">Дата</th>
@@ -445,8 +456,8 @@ function renderTable() {
                   <tbody>${historyRows || '<tr><td colspan="4" class="px-3 py-3 text-center text-slate-500">Історія ще порожня</td></tr>'}</tbody>
                 </table>
               </div>
-              <div class="mt-4 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                <div class="mb-2 text-xs uppercase tracking-wide text-slate-500">Розібрана відповідь KeyCRM</div>
+              <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div class="mb-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">🔎 Розібрана відповідь KeyCRM</div>
                 <div class="grid gap-2 sm:grid-cols-2 text-sm">${crmFields}</div>
               </div>
             </section>

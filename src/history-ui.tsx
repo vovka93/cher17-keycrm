@@ -295,7 +295,7 @@ function AppShell() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div id="statsCards" className="grid grid-cols-2 gap-3">
+                <div id="statsCards" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <StatSkeleton title="Записів" />
                   <StatSkeleton title="Completed" />
                   <StatSkeleton title="Processing" />
@@ -322,6 +322,10 @@ function AppShell() {
                   <Badge>
                     <ShieldCheck className="mr-1 h-3.5 w-3.5" />
                     Error trace
+                  </Badge>
+                  <Badge>
+                    <ChartColumn className="mr-1 h-3.5 w-3.5" />
+                    Dense view
                   </Badge>
                 </div>
               </div>
