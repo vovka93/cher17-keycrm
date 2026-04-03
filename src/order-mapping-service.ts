@@ -72,15 +72,23 @@ export async function createOrUpdateOrderMapping(
     // Update existing order mapping
     const existing: OrderMapping = JSON.parse(existingData as string);
 
-    // Add new status to history using efficient hash storage
-    // Store CRM response for error states, retries, or if order ID is missing
-    const shouldStoreCrmInHistory = status === 'failed' || 
-      status === 'processing' || 
-      (crmResponse && !crmResponse.id);
-    await addStatusToHistoryHash(rowid, status, shouldStoreCrmInHistory ? crmResponse : undefined);
+    const isDuplicatePending =
+      status === 'pending' &&
+      existing.current_status === 'pending' &&
+      !crmResponse;
+
+    if (!isDuplicatePending) {
+      // Add new status to history using efficient hash storage
+      // Store CRM response for error states, retries, or if order ID is missing
+      const shouldStoreCrmInHistory = status === 'failed' || 
+        status === 'processing' || 
+        (crmResponse && !crmResponse.id);
+      await addStatusToHistoryHash(rowid, status, shouldStoreCrmInHistory ? crmResponse : undefined);
+    }
     
     existing.current_status = status;
     existing.updated_at = now;
+    existing.site_order = siteOrder;
 
     // Update CRM data if provided
     if (crmResponse) {
