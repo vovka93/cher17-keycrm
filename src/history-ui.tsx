@@ -141,10 +141,10 @@ function FilterField({
 
 function StatSkeleton({ title }: { title: string }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
       <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{title}</div>
-      <div className="mt-3 h-8 w-20 rounded-lg bg-slate-800" />
-      <div className="mt-2 h-3 w-28 rounded bg-slate-800" />
+      <div className="mt-2 h-7 w-20 rounded-lg bg-slate-800" />
+      <div className="mt-2 h-3 w-24 rounded bg-slate-800" />
     </div>
   );
 }
@@ -209,25 +209,59 @@ function AppShell() {
             </div>
           </header>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_380px]">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Overview</h2>
+                  <p className="mt-1 text-sm text-slate-400">Стан поточної вибірки та швидкий перезавантажувач.</p>
+                </div>
+                <Button id="reloadButton" variant="secondary" type="button">
+                  <RefreshCw className="h-4 w-4" />
+                  Оновити
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div id="statsCards" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                <StatSkeleton title="Записів" />
+                <StatSkeleton title="Completed" />
+                <StatSkeleton title="Processing" />
+                <StatSkeleton title="Failed" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4 overflow-hidden">
+            <CardHeader>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-white">Фільтри та навігація</h2>
+                    <h2 className="text-lg font-semibold text-white">Замовлення</h2>
                     <p className="mt-1 text-sm text-slate-400">
-                      Швидко знайди потрібний order, звузь список і зміни спосіб перегляду.
+                      Детальний журнал синхронізації з можливістю розкриття кожного запису.
                     </p>
                   </div>
-                  <Badge className="border-slate-700 bg-slate-900/70 text-slate-300">Live search</Badge>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="border-cyan-500/20 bg-cyan-500/10 text-cyan-200">
+                      <Package className="mr-1 h-3.5 w-3.5" />
+                      Site + KeyCRM
+                    </Badge>
+                    <Badge>
+                      <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+                      Error trace
+                    </Badge>
+                    <Badge>
+                      <ChartColumn className="mr-1 h-3.5 w-3.5" />
+                      Dense view
+                    </Badge>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <form className="grid gap-3 md:grid-cols-2 2xl:grid-cols-6" role="search">
+
+                <form className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_220px_220px_180px_150px]" role="search">
                   <FilterField
                     label="Пошук"
                     htmlFor="searchInput"
-                    className="2xl:col-span-2"
                     hint="ID, клієнт, телефон, email, SKU, CRM ID"
                     icon={<Search className="h-3.5 w-3.5" />}
                   >
@@ -278,56 +312,6 @@ function AppShell() {
                     </Select>
                   </FilterField>
                 </form>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">Overview</h2>
-                    <p className="mt-1 text-sm text-slate-400">Стан поточної вибірки та швидкий перезавантажувач.</p>
-                  </div>
-                  <Button id="reloadButton" variant="secondary" type="button">
-                    <RefreshCw className="h-4 w-4" />
-                    Оновити
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div id="statsCards" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <StatSkeleton title="Записів" />
-                  <StatSkeleton title="Completed" />
-                  <StatSkeleton title="Processing" />
-                  <StatSkeleton title="Failed" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="mt-4 overflow-hidden">
-            <CardHeader>
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-white">Замовлення</h2>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Детальний журнал синхронізації з можливістю розкриття кожного запису.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="border-cyan-500/20 bg-cyan-500/10 text-cyan-200">
-                    <Package className="mr-1 h-3.5 w-3.5" />
-                    Site + KeyCRM
-                  </Badge>
-                  <Badge>
-                    <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-                    Error trace
-                  </Badge>
-                  <Badge>
-                    <ChartColumn className="mr-1 h-3.5 w-3.5" />
-                    Dense view
-                  </Badge>
-                </div>
               </div>
             </CardHeader>
             <CardContent>
