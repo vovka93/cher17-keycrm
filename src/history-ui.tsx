@@ -210,7 +210,7 @@ function AppShell() {
           </header>
 
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="border-b-0 pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold text-white">Overview</h2>
