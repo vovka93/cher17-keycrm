@@ -29,6 +29,8 @@ const el = {
   tableBody: document.getElementById('historyTableBody'),
   loadingState: document.getElementById('loadingState'),
   errorState: document.getElementById('errorState'),
+  emptyState: document.getElementById('emptyState'),
+  feedbackBanner: document.getElementById('feedbackBanner'),
   resultsLabel: document.getElementById('resultsLabel'),
 };
 
@@ -64,6 +66,49 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function setFeedback(message = '', tone = 'neutral') {
+  if (!el.feedbackBanner) return;
+  if (!message) {
+    el.feedbackBanner.textContent = '';
+    el.feedbackBanner.className = 'hidden mb-4 rounded-xl border px-4 py-3 text-sm';
+    return;
+  }
+
+  const tones = {
+    neutral: 'mb-4 rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-3 text-sm text-slate-200',
+    success: 'mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200',
+    error: 'mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200',
+  };
+
+  el.feedbackBanner.className = tones[tone] || tones.neutral;
+  el.feedbackBanner.textContent = message;
+}
+
+function setLoading(isLoading) {
+  el.loadingState.classList.toggle('hidden', !isLoading);
+  if (el.searchInput) el.searchInput.setAttribute('aria-busy', String(isLoading));
+}
+
+function showTable(show) {
+  el.tableWrap.classList.toggle('hidden', !show);
+}
+
+function showEmpty(show) {
+  if (!el.emptyState) return;
+  el.emptyState.classList.toggle('hidden', !show);
+}
+
+function showError(message = '') {
+  if (!message) {
+    el.errorState.textContent = '';
+    el.errorState.classList.add('hidden');
+    return;
+  }
+
+  el.errorState.textContent = message;
+  el.errorState.classList.remove('hidden');
 }
 
 function getNestedValue(object, path) {
@@ -173,21 +218,24 @@ function renderPagination() {
     el.pageIndicator.textContent = 'Без пагінації';
     el.prevPageButton.disabled = true;
     el.nextPageButton.disabled = true;
+    el.querySummary.textContent = 'Немає пагінації';
     return;
   }
+
+  const from = pagination.total_count === 0 ? 0 : ((pagination.current_page - 1) * pagination.per_page) + 1;
+  const to = Math.min(pagination.current_page * pagination.per_page, pagination.total_count);
 
   el.pageIndicator.textContent = `Сторінка ${pagination.current_page} / ${Math.max(pagination.total_pages, 1)}`;
   el.prevPageButton.disabled = !pagination.has_prev;
   el.nextPageButton.disabled = !pagination.has_next;
   setCurrentPage(pagination.current_page);
 
-  const parts = [];
-  if (el.statusFilter.value !== 'all') parts.push(`status=${el.statusFilter.value}`);
-  if (el.searchInput.value.trim()) parts.push(`search=“${el.searchInput.value.trim()}”`);
-  parts.push(`per_page=${pagination.per_page}`);
-  parts.push(`total=${pagination.total_count}`);
+  const parts = [`Показано ${from}–${to} з ${pagination.total_count}`];
+  if (el.statusFilter.value !== 'all') parts.push(`статус: ${el.statusFilter.value}`);
+  if (el.searchInput.value.trim()) parts.push(`пошук: “${el.searchInput.value.trim()}”`);
+  parts.push(`на сторінку: ${pagination.per_page}`);
   const delayedCount = (state.orders || []).filter(isDelayedLead).length;
-  if (delayedCount) parts.push(`delayed_leads=${delayedCount}`);
+  if (delayedCount) parts.push(`delayed lead: ${delayedCount}`);
   el.querySummary.textContent = parts.join(' · ');
 }
 
@@ -203,33 +251,44 @@ function renderStats() {
   const failed = byStatus.failed || 0;
   const completed = byStatus.completed || 0;
   const delayed = byStatus.delayed || 0;
+  const processing = byStatus.processing || 0;
+  const avgOrder = orders.length ? totalRevenue / orders.length : 0;
 
   const cards = [
-    { label: 'У записів', value: String(orders.length), hint: 'після фільтрів' },
-    { label: 'Delayed leads', value: String(delayed), hint: 'чекають оплату / апдейт' },
-    { label: 'Completed', value: String(completed), hint: 'успішні синки' },
-    { label: 'Failed', value: String(failed), hint: 'є що дебажити' },
-    { label: 'Сума', value: formatMoney(totalRevenue, orders[0]?.site_order?.currency || 'UAH'), hint: 'по сайту' },
+    { label: 'Записів', value: String(orders.length), hint: 'видно зараз' },
+    { label: 'Completed', value: String(completed), hint: 'успішно оброблено' },
+    { label: 'Processing', value: String(processing), hint: 'в роботі зараз' },
+    { label: 'Failed', value: String(failed), hint: 'потребують уваги' },
+    { label: 'Delayed leads', value: String(delayed), hint: 'очікують повторну обробку' },
+    { label: 'Середній чек', value: formatMoney(avgOrder, orders[0]?.site_order?.currency || 'UAH'), hint: 'по поточному списку' },
   ];
 
   el.statsCards.innerHTML = cards.map((card) => `
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-      <div class="text-xs uppercase tracking-wide text-slate-500">${escapeHtml(card.label)}</div>
-      <div class="mt-2 text-2xl font-semibold text-white">${escapeHtml(card.value)}</div>
-      <div class="mt-1 text-xs text-slate-500">${escapeHtml(card.hint)}</div>
-    </div>
+    <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+      <div class="text-[11px] uppercase tracking-[0.2em] text-slate-500">${escapeHtml(card.label)}</div>
+      <div class="mt-2 text-xl font-semibold text-white sm:text-2xl">${escapeHtml(card.value)}</div>
+      <div class="mt-1 text-xs leading-5 text-slate-500">${escapeHtml(card.hint)}</div>
+    </section>
   `).join('');
 }
 
 function renderTable() {
   const rows = state.filteredOrders;
-  el.resultsLabel.textContent = `Показано ${rows.length} із ${state.orders.length} записів`;
+  const total = state.pagination?.total_count || state.orders.length;
+  el.resultsLabel.textContent = `Показано ${rows.length} записів${total ? ` · усього ${total}` : ''}`;
 
   if (!rows.length) {
-    el.tableBody.innerHTML = '<tr><td colspan="7" class="px-4 py-10 text-center text-slate-400">Нічого не знайдено. Спробуй інші фільтри або пошук.</td></tr>';
+    el.tableBody.innerHTML = '';
+    showTable(false);
+    showEmpty(true);
+    setFeedback('Фільтр застосовано, але записів не знайдено.', 'neutral');
     renderStats();
     return;
   }
+
+  showEmpty(false);
+  showTable(true);
+  setFeedback(`Завантажено ${rows.length} записів на сторінці.`, 'success');
 
   el.tableBody.innerHTML = rows.map((order, index) => {
     const site = order.site_order || {};
@@ -264,36 +323,48 @@ function renderTable() {
       </div>
     `).join('') || '<div class="text-slate-500">KeyCRM ще нічого не повернув.</div>';
 
+    const customerName = [site.firstName, site.lastName].filter(Boolean).join(' ') || '—';
+    const siteStatus = site.statusDescription || site.status || '—';
+    const paymentDelivery = [site.paymentMethod, site.deliveryMethod].filter(Boolean).join(' · ') || '—';
+    const itemCount = (site.items || []).length;
+
     return `
-      <tr class="cursor-pointer transition hover:bg-slate-900/60" data-expand-row="row-${index}">
+      <tr class="cursor-pointer transition hover:bg-slate-900/60 focus-within:bg-slate-900/60" data-expand-row="row-${index}" tabindex="0" aria-expanded="false">
         <td class="px-4 py-4 align-top">
-          <div class="font-semibold text-white">#${escapeHtml(site.externalOrderId || order._rowid)}</div>
-          <div class="mt-1 text-xs text-slate-500 mono">rowid: ${escapeHtml(order._rowid)}</div>
-          <div class="mt-2 text-xs text-slate-400">${escapeHtml(formatDate(site.date))}</div>
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="font-semibold text-white">#${escapeHtml(site.externalOrderId || order._rowid)}</div>
+              <div class="mt-1 text-xs text-slate-500 mono">rowid: ${escapeHtml(order._rowid)}</div>
+            </div>
+            <span class="rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusTone[displayStatus] || statusTone.unknown}">${escapeHtml(displayStatus)}</span>
+          </div>
+          <div class="mt-2 text-xs text-slate-400">Створено на сайті: ${escapeHtml(formatDate(site.date))}</div>
         </td>
         <td class="px-4 py-4 align-top">
-          <div class="font-medium text-slate-100">${escapeHtml([site.firstName, site.lastName].filter(Boolean).join(' ') || '—')}</div>
-          <div class="mt-1 text-slate-400">${escapeHtml(site.phone || '—')}</div>
+          <div class="font-medium text-slate-100">${escapeHtml(customerName)}</div>
+          <div class="mt-1 text-slate-300">${escapeHtml(site.phone || '—')}</div>
           <div class="mt-1 text-xs text-slate-500">${escapeHtml(site.email || '—')}</div>
         </td>
         <td class="px-4 py-4 align-top">
-          <div class="text-slate-200">${escapeHtml(compactText(itemPreview, 48))}</div>
-          <div class="mt-1 text-xs text-slate-500">${escapeHtml((site.items || []).length)} позицій</div>
+          <div class="text-slate-200">${escapeHtml(compactText(itemPreview, 64))}</div>
+          <div class="mt-1 text-xs text-slate-500">${escapeHtml(itemCount)} позицій</div>
         </td>
         <td class="px-4 py-4 align-top">
           <div class="font-medium text-slate-100">${escapeHtml(formatMoney(site.totalCost, site.currency || 'UAH'))}</div>
-          <div class="mt-1 text-slate-400">${escapeHtml(site.statusDescription || site.status || '—')}</div>
-          <div class="mt-1 text-xs text-slate-500">${escapeHtml(site.paymentMethod || '—')} · ${escapeHtml(site.deliveryMethod || '—')}</div>
+          <div class="mt-1 text-slate-300">${escapeHtml(siteStatus)}</div>
+          <div class="mt-1 text-xs text-slate-500">${escapeHtml(paymentDelivery)}</div>
         </td>
         <td class="px-4 py-4 align-top">
           <div class="font-medium text-slate-100">${escapeHtml(crmId || '—')}</div>
           <div class="mt-1 text-slate-400">${escapeHtml(getCrmSummary(order))}</div>
         </td>
         <td class="px-4 py-4 align-top">
-          <span class="rounded-full border px-3 py-1 text-xs font-medium ${statusTone[displayStatus] || statusTone.unknown}">${escapeHtml(displayStatus)}</span>
-          ${delayLabel ? `<div class="mt-2 text-xs text-violet-300">${escapeHtml(delayLabel)}</div>` : latestError ? `<div class="mt-2 text-xs text-rose-300">${escapeHtml(compactText(latestError, 80))}</div>` : '<div class="mt-2 text-xs text-slate-500">Без свіжих помилок</div>'}
+          ${delayLabel ? `<div class="text-xs text-violet-300">${escapeHtml(delayLabel)}</div>` : latestError ? `<div class="text-xs text-rose-300">${escapeHtml(compactText(latestError, 88))}</div>` : '<div class="text-xs text-slate-500">Без свіжих помилок</div>'}
         </td>
-        <td class="px-4 py-4 align-top text-slate-300">${escapeHtml(formatDate(order.updated_at))}</td>
+        <td class="px-4 py-4 align-top text-slate-300">
+          <div>${escapeHtml(formatDate(order.updated_at))}</div>
+          <div class="mt-1 text-xs text-slate-500">${escapeHtml(formatDate(order.created_at))}</div>
+        </td>
       </tr>
       <tr id="row-${index}" class="hidden bg-slate-900/40">
         <td colspan="7" class="px-4 pb-5 pt-1">
@@ -353,9 +424,20 @@ function renderTable() {
   }).join('');
 
   document.querySelectorAll('[data-expand-row]').forEach((row) => {
-    row.addEventListener('click', () => {
+    const toggleRow = () => {
       const target = document.getElementById(row.getAttribute('data-expand-row'));
-      if (target) target.classList.toggle('hidden');
+      if (!target) return;
+      const expanded = row.getAttribute('aria-expanded') === 'true';
+      target.classList.toggle('hidden', expanded);
+      row.setAttribute('aria-expanded', String(!expanded));
+    };
+
+    row.addEventListener('click', toggleRow);
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleRow();
+      }
     });
   });
 
@@ -389,10 +471,17 @@ function applyClientSorting() {
   renderTable();
 }
 
+function focusTableRegion() {
+  if (window.innerWidth >= 768) return;
+  el.tableWrap?.focus?.();
+}
+
 async function loadHistory(page = 1) {
-  el.loadingState.classList.remove('hidden');
-  el.tableWrap.classList.add('hidden');
-  el.errorState.classList.add('hidden');
+  setLoading(true);
+  showTable(false);
+  showEmpty(false);
+  showError();
+  setFeedback('Оновлюю список замовлень…', 'neutral');
 
   try {
     const params = new URLSearchParams();
@@ -412,13 +501,15 @@ async function loadHistory(page = 1) {
     state.pagination = payload.pagination || null;
     state.filteredOrders = [...state.orders];
 
-    el.loadingState.classList.add('hidden');
-    el.tableWrap.classList.remove('hidden');
+    setLoading(false);
     applyClientSorting();
   } catch (error) {
-    el.loadingState.classList.add('hidden');
-    el.errorState.textContent = 'Не вдалося завантажити історію: ' + (error?.message || error);
-    el.errorState.classList.remove('hidden');
+    setLoading(false);
+    showTable(false);
+    showEmpty(false);
+    const message = 'Не вдалося завантажити історію: ' + (error?.message || error);
+    showError(message);
+    setFeedback('Список не оновився. Перевір бекенд або спробуй ще раз.', 'error');
   }
 }
 
@@ -428,10 +519,19 @@ el.searchInput.addEventListener('input', debouncedReload);
 el.statusFilter.addEventListener('change', () => loadHistory(1));
 el.pageSize.addEventListener('change', () => loadHistory(1));
 [el.sortField, el.sortDirection].forEach((node) => {
-  node.addEventListener('change', applyClientSorting);
+  node.addEventListener('change', () => {
+    applyClientSorting();
+    setFeedback('Сортування оновлено.', 'neutral');
+  });
 });
-el.prevPageButton.addEventListener('click', () => loadHistory(Math.max(1, getCurrentPage() - 1)));
-el.nextPageButton.addEventListener('click', () => loadHistory(getCurrentPage() + 1));
+el.prevPageButton.addEventListener('click', async () => {
+  await loadHistory(Math.max(1, getCurrentPage() - 1));
+  focusTableRegion();
+});
+el.nextPageButton.addEventListener('click', async () => {
+  await loadHistory(getCurrentPage() + 1);
+  focusTableRegion();
+});
 el.reloadButton.addEventListener('click', () => loadHistory(getCurrentPage()));
 
 loadHistory(1);
