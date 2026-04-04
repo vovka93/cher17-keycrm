@@ -3,10 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   Search,
   RefreshCw,
-  Package,
   Filter,
   ChartColumn,
-  ShieldCheck,
 } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { clsx, type ClassValue } from "clsx";
@@ -171,85 +169,64 @@ function AppShell() {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="border-cyan-500/20 bg-cyan-500/10 text-cyan-200">cher17</Badge>
-                <Badge>History UI</Badge>
-                <Badge>shadcn-style</Badge>
+                <Badge>History</Badge>
               </div>
               <div className="space-y-2">
                 <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  Order History Control Center
+                  Історія синхронізації замовлень
                 </h1>
                 <p className="max-w-3xl text-sm leading-6 text-slate-400 sm:text-[15px]">
-                  Список замовлень, статусів, помилок, черг і KeyCRM-відповідей в одному інтерфейсі. Щільно, чисто, без каші.
+                  Чистий журнал замовлень без зайвого шуму: швидкий пошук, фільтри, статуси, CRM-слід і деталі по кліку.
                 </p>
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:w-[420px]">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Фокус</div>
-                <div className="mt-2 text-sm font-medium text-slate-200">Clarity · Status flow · CRM trace</div>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Interaction</div>
-                <div className="mt-2 text-sm font-medium text-slate-200">Search · Filters · Expand rows</div>
-              </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button id="reloadButton" variant="secondary" type="button">
+                <RefreshCw className="h-4 w-4" />
+                Оновити
+              </Button>
             </div>
           </header>
 
-          <Card>
-            <CardHeader className="border-b-0 pb-3">
-              <div className="flex items-start justify-between gap-3">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
+            <Card>
+              <CardHeader className="border-b-0 pb-3">
                 <div>
-                  <h2 className="text-lg font-semibold text-white">Overview</h2>
-                  <p className="mt-1 text-sm text-slate-400">Стан поточної вибірки та швидкий перезавантажувач.</p>
+                  <h2 className="text-lg font-semibold text-white">Огляд поточної вибірки</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Тільки ключові сигнали по сторінці: успішні, проблемні, відкладені й сума.
+                  </p>
                 </div>
-                <Button id="reloadButton" variant="secondary" type="button">
-                  <RefreshCw className="h-4 w-4" />
-                  Оновити
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div id="statsCards" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                <StatSkeleton title="Записів" />
-                <StatSkeleton title="Completed" />
-                <StatSkeleton title="Processing" />
-                <StatSkeleton title="Failed" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="mt-4 overflow-hidden">
-            <CardHeader>
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">Замовлення</h2>
-                    <p className="mt-1 text-sm text-slate-400">
-                      Детальний журнал синхронізації з можливістю розкриття кожного запису.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge className="border-cyan-500/20 bg-cyan-500/10 text-cyan-200">
-                      <Package className="mr-1 h-3.5 w-3.5" />
-                      Site + KeyCRM
-                    </Badge>
-                    <Badge>
-                      <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-                      Error trace
-                    </Badge>
-                    <Badge>
-                      <ChartColumn className="mr-1 h-3.5 w-3.5" />
-                      Dense view
-                    </Badge>
-                  </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div id="statsCards" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <StatSkeleton title="Записів" />
+                  <StatSkeleton title="Completed" />
+                  <StatSkeleton title="Failed" />
+                  <StatSkeleton title="Delayed" />
+                  <StatSkeleton title="Середній чек" />
                 </div>
+              </CardContent>
+            </Card>
 
-                <form className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_220px_220px_180px_150px]" role="search">
+            <Card>
+              <CardHeader className="border-b-0 pb-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Фільтри</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Пошук по ID, клієнту, телефону, email, SKU та CRM-полях.
+                  </p>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <form className="grid gap-3 md:grid-cols-2" role="search">
                   <FilterField
                     label="Пошук"
                     htmlFor="searchInput"
-                    hint="ID, клієнт, телефон, email, SKU, CRM ID"
+                    hint="ID, ПІБ, телефон, email, SKU, CRM ID"
                     icon={<Search className="h-3.5 w-3.5" />}
+                    className="md:col-span-2"
                   >
                     <Input
                       id="searchInput"
@@ -260,7 +237,7 @@ function AppShell() {
                   </FilterField>
 
                   <FilterField label="Статус" htmlFor="statusFilter" icon={<Filter className="h-3.5 w-3.5" />}>
-                    <Select id="statusFilter">
+                    <Select id="statusFilter" defaultValue="all">
                       <option value="all">Усі</option>
                       <option value="pending">pending</option>
                       <option value="processing">processing</option>
@@ -269,8 +246,17 @@ function AppShell() {
                     </Select>
                   </FilterField>
 
+                  <FilterField label="На сторінку" htmlFor="pageSize">
+                    <Select id="pageSize" defaultValue="25">
+                      <option value="10">10</option>
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </Select>
+                  </FilterField>
+
                   <FilterField label="Сортування" htmlFor="sortField" icon={<ChartColumn className="h-3.5 w-3.5" />}>
-                    <Select id="sortField">
+                    <Select id="sortField" defaultValue="updated_at">
                       <option value="updated_at">Оновлено</option>
                       <option value="created_at">Створено</option>
                       <option value="site_order.date">Дата замовлення</option>
@@ -281,33 +267,45 @@ function AppShell() {
                   </FilterField>
 
                   <FilterField label="Напрям" htmlFor="sortDirection">
-                    <Select id="sortDirection">
+                    <Select id="sortDirection" defaultValue="desc">
                       <option value="desc">↓ Новіші</option>
                       <option value="asc">↑ Старіші</option>
                     </Select>
                   </FilterField>
 
-                  <FilterField label="На сторінку" htmlFor="pageSize">
-                    <Select id="pageSize">
-                      <option value="10">10</option>
-                      <option value="25" selected>
-                        25
-                      </option>
-                      <option value="50">50</option>
-                      <option value="100">100</option>
-                    </Select>
-                  </FilterField>
+                  <div className="md:col-span-2 flex flex-wrap items-center gap-2 pt-1">
+                    <Button id="clearFiltersButton" variant="outline" type="button">
+                      Скинути фільтри
+                    </Button>
+                    <p className="text-xs text-slate-500">
+                      Результати оновлюються автоматично, деталі догружаються тільки при розкритті рядка.
+                    </p>
+                  </div>
                 </form>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="mt-4 overflow-hidden">
+            <CardHeader>
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Журнал замовлень</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Розкрий рядок, щоб подивитись товари, історію статусів і CRM-відповідь без перевантаження списку.
+                  </p>
+                </div>
+                <div id="resultsChips" className="flex flex-wrap gap-2" aria-live="polite" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 lg:grid-cols-[1fr_auto] lg:items-center">
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-1">
                   <p id="resultsLabel" className="text-sm font-medium text-slate-200">
                     Завантаження...
                   </p>
                   <p id="querySummary" className="text-xs text-slate-500">
-                    Server-side filter: none
+                    Очікуємо дані від бекенда
                   </p>
                 </div>
                 <nav className="flex items-center gap-2" aria-label="Пагінація історії замовлень">
@@ -328,14 +326,14 @@ function AppShell() {
               <div id="loadingState" className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-12 text-center text-slate-300">
                 <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-slate-700 border-t-cyan-400"></div>
                 <p className="text-sm font-medium text-slate-100">Тягну історію…</p>
-                <p className="mt-1 text-xs text-slate-500">Order log, statuses, CRM replies, retry metadata</p>
+                <p className="mt-1 text-xs text-slate-500">Підтягуємо поточну сторінку, не весь світ одразу</p>
               </div>
 
               <div id="errorState" className="hidden rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-8 text-center text-rose-200" role="alert"></div>
 
               <div id="emptyState" className="hidden rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-12 text-center">
                 <p className="text-sm font-medium text-slate-100">Нічого не знайдено</p>
-                <p className="mt-1 text-xs text-slate-500">Зміни пошук, фільтр або розмір сторінки.</p>
+                <p className="mt-1 text-xs text-slate-500">Зміни пошук або скинь фільтри.</p>
               </div>
 
               <div id="tableWrap" className="hidden overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/80" tabIndex={0}>
@@ -345,11 +343,10 @@ function AppShell() {
                     <tr>
                       <th scope="col" className="px-4 py-3">Замовлення</th>
                       <th scope="col" className="px-4 py-3">Клієнт</th>
-                      <th scope="col" className="px-4 py-3">Товари</th>
-                      <th scope="col" className="px-4 py-3">Сайт</th>
-                      <th scope="col" className="px-4 py-3">KeyCRM</th>
-                      <th scope="col" className="px-4 py-3">Статус</th>
-                      <th scope="col" className="px-4 py-3">Оновлено</th>
+                      <th scope="col" className="px-4 py-3">Деталі</th>
+                      <th scope="col" className="px-4 py-3">CRM / sync</th>
+                      <th scope="col" className="px-4 py-3">Стан</th>
+                      <th scope="col" className="px-4 py-3">Активність</th>
                     </tr>
                   </thead>
                   <tbody id="historyTableBody" className="divide-y divide-slate-800 bg-slate-950/50"></tbody>
