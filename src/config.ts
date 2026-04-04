@@ -5,7 +5,7 @@ export const CONFIG = {
   BACKOFF_MULTIPLIER: 2,
   WEBHOOK_PORT: 3000,
   PROCESSING_INTERVAL: 5000, // Перевірка черги кожні 5 секунд
-  FISCALIZATION_PROCESSING_INTERVAL: 10000,
+  FISCALIZATION_PROCESSING_INTERVAL: 5000, // Перевірка fiscalization-черги кожні 5 секунд
   LEAD_DELAY_MS: 10 * 60 * 1000, // 10 хвилин перед створенням ліда
   ORDER_LOCK_TTL_SEC: 5 * 60,
   CREATE_LOCK_TTL_SEC: 15 * 60,
@@ -13,7 +13,7 @@ export const CONFIG = {
   LEAD_HASH_TTL_SEC: 24 * 60 * 60,
   FISCALIZATION_WATCH_TTL_SEC: 48 * 60 * 60,
   FISCALIZATION_MAX_RETRIES: 30,
-  FISCALIZATION_INITIAL_BACKOFF_MS: 30 * 1000,
+  FISCALIZATION_INITIAL_BACKOFF_MS: 60 * 1000, // Першу перевірку статусу фіскалізації робимо через 1 хвилину
   FISCALIZATION_MAX_BACKOFF_MS: 15 * 60 * 1000,
 };
 
