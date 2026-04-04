@@ -7,6 +7,7 @@ import {
   getOrderHistoryLegacy,
   getOrderHistoryCount,
   getOrderMappingsByStatus,
+  getOrderMapping,
   cleanHistory,
   getHistoryStats,
 } from "./order-mapping-service";
