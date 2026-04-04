@@ -121,7 +121,7 @@ function StatSkeleton({ title }: { title: string }) {
 
 function AppShell() {
   return (
-    <html lang="uk">
+    <html lang="uk" className="dark">
       <head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -138,17 +138,9 @@ function AppShell() {
 
         <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
           <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className="border-[color:color-mix(in_oklch,var(--primary)_18%,white_82%)] bg-[color:color-mix(in_oklch,var(--primary)_10%,white_90%)] text-[var(--primary)]">
-                  cher17
-                </Badge>
-                <Badge>History</Badge>
-              </div>
-              <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl">
-                Історія синхронізації
-              </h1>
-            </div>
+            <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl">
+              Історія синхронізації
+            </h1>
 
             <Button id="reloadButton" variant="secondary" type="button">
               <RefreshCw className="h-4 w-4" />
@@ -231,10 +223,7 @@ function AppShell() {
 
           <Card className="mt-4 overflow-hidden">
             <CardHeader>
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <h2 className="text-lg font-semibold">Замовлення</h2>
-                <div id="resultsChips" className="flex flex-wrap gap-2" aria-live="polite" />
-              </div>
+              <h2 className="text-lg font-semibold">Замовлення</h2>
             </CardHeader>
             <CardContent>
               <div className="history-surface mb-4 flex flex-col gap-3 rounded-[var(--radius)] p-3 lg:flex-row lg:items-center lg:justify-between">

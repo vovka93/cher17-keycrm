@@ -369,7 +369,7 @@ function renderOrderDetail(order) {
 
   const historyRows = (order.status_history || []).map((entry) => `
     <tr class="border-b last:border-b-0">
-      <td class="w-44 px-3 py-2 align-top"><span class="inline-flex rounded-full border px-2 py-1 text-xs ${statusTone[entry.status] || statusTone.unknown}">${escapeHtml(prettifyHistoryStatus(entry.status))}</span></td>
+      <td class="w-48 px-3 py-2 align-top"><span class="inline-flex rounded-full border px-2 py-1 text-xs ${statusTone[entry.status] || statusTone.unknown}">${escapeHtml(prettifyHistoryStatus(entry.status))}</span></td>
       <td class="px-3 py-2 align-top text-[var(--muted-foreground)]">${escapeHtml(formatDate(entry.date))}</td>
       <td class="px-3 py-2 align-top text-[var(--foreground)]">${escapeHtml(compactText(entry.error_message || entry.crm_response?.message || entry.crm_response?.status || entry.crm_response?.fiscal_status || '—', 160))}</td>
       <td class="px-3 py-2 align-top text-[var(--muted-foreground)]">${escapeHtml(entry.retry_count ?? '—')}</td>
@@ -457,7 +457,7 @@ function renderOrderDetail(order) {
           <table class="min-w-full text-sm">
             <thead class="history-table-head text-left text-[11px] uppercase tracking-[0.16em]">
               <tr>
-                <th class="w-44 px-3 py-2">Статус</th>
+                <th class="w-48 px-3 py-2">Статус</th>
                 <th class="px-3 py-2">Дата</th>
                 <th class="px-3 py-2">Що сталося</th>
                 <th class="px-3 py-2">Retry</th>
