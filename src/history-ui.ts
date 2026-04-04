@@ -7,11 +7,9 @@ export function renderHistoryPage() {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${HISTORY_UI_TITLE}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/history/styles.css" />
     <style>
-      body { background: #0b1020; }
       .glass { background: rgba(15, 23, 42, 0.78); backdrop-filter: blur(14px); }
-      .mono { font-variant-ligatures: none; }
     </style>
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100">

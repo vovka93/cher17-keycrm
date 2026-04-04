@@ -156,21 +156,7 @@ function AppShell() {
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>{HISTORY_UI_TITLE}</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <style>{`
-          :root {
-            color-scheme: dark;
-          }
-          body {
-            background:
-              radial-gradient(circle at top, rgba(6, 182, 212, 0.12), transparent 28%),
-              linear-gradient(180deg, #020617 0%, #0f172a 100%);
-          }
-          .mono { font-variant-ligatures: none; }
-          ::-webkit-scrollbar { width: 10px; height: 10px; }
-          ::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.8); border-radius: 999px; }
-          ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
-        `}</style>
+        <link rel="stylesheet" href="/history/styles.css" />
       </head>
       <body className="min-h-screen bg-slate-950 text-slate-100 antialiased">
         <a

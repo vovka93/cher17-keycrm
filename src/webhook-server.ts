@@ -13,6 +13,7 @@ import {
 } from "./order-mapping-service";
 import { renderHistoryPage } from "./history-ui.tsx";
 import historyAppScript from "./history-app.js" with { type: "text" };
+import historyStyles from "./history.generated.css" with { type: "text" };
 import redis from "./redis";
 import { handleFiscalizationWebhook } from "./fiscalization-service";
 import { getDelayedQueueCount, getNextDelayedRunAt } from "./delayed-queue";
@@ -390,6 +391,16 @@ export function createWebhookServer() {
         }),
       },
     )
+    .get("/styles.css", ({ headers, set }) => {
+      if (!isAuthorizedHistoryRequest(headers)) {
+        set.status = 401;
+        set.headers["www-authenticate"] = 'Basic realm="cher17-history"';
+        return "Unauthorized";
+      }
+
+      set.headers["content-type"] = "text/css; charset=utf-8";
+      return historyStyles;
+    })
     .get("/app.js", ({ headers, set }) => {
       if (!isAuthorizedHistoryRequest(headers)) {
         set.status = 401;

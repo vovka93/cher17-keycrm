@@ -10,7 +10,7 @@ WORKDIR /usr/src/app
 COPY --from=deps /temp/dev/node_modules ./node_modules
 COPY . .
 
-RUN bun build --compile --target bun --outfile server src/index.ts
+RUN bun run build
 
 ENV KEYCRM_KEY=${KEYCRM_KEY}
 ENV REDIS_URL=${REDIS_URL}
