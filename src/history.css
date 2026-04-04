@@ -107,14 +107,15 @@
   body {
     background:
       radial-gradient(circle at top, color-mix(in oklch, var(--secondary) 38%, var(--background) 62%), transparent 34%),
-      linear-gradient(180deg, color-mix(in oklch, var(--background) 92%, black 8%) 0%, color-mix(in oklch, var(--muted) 52%, var(--background) 48%) 100%);
+      linear-gradient(180deg, color-mix(in oklch, var(--background) 88%, var(--secondary) 12%) 0%, color-mix(in oklch, var(--muted) 52%, var(--background) 48%) 100%);
     color: var(--foreground);
     font-family: var(--font-sans);
     letter-spacing: var(--tracking-normal);
   }
 
   ::selection {
-    background: color-mix(in oklch, var(--primary) 18%, white 82%);
+    background: color-mix(in oklch, var(--primary) 28%, var(--background) 72%);
+    color: var(--foreground);
   }
 
   .mono {
@@ -128,42 +129,54 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: color-mix(in oklch, var(--muted-foreground) 36%, white 64%);
+    background: color-mix(in oklch, var(--muted-foreground) 42%, var(--background) 58%);
     border-radius: 999px;
   }
 
   ::-webkit-scrollbar-track {
-    background: color-mix(in oklch, var(--muted) 80%, white 20%);
+    background: color-mix(in oklch, var(--muted) 72%, var(--background) 28%);
   }
 }
 
 @layer components {
   .history-card {
-    background: color-mix(in oklch, var(--card) 97%, var(--background) 3%);
+    background: color-mix(in oklch, var(--card) 94%, var(--background) 6%);
     color: var(--card-foreground);
     border: 1px solid var(--border);
     box-shadow: var(--shadow-sm);
   }
 
   .history-surface {
-    background: color-mix(in oklch, var(--muted) 78%, white 22%);
+    background: color-mix(in oklch, var(--muted) 58%, var(--card) 42%);
     border: 1px solid var(--border);
   }
 
   .history-subtle {
-    background: color-mix(in oklch, var(--accent) 46%, white 54%);
-    border: 1px solid color-mix(in oklch, var(--border) 92%, white 8%);
+    background: color-mix(in oklch, var(--accent) 40%, var(--card) 60%);
+    border: 1px solid color-mix(in oklch, var(--accent) 24%, var(--border) 76%);
   }
 
   .history-pill {
-    background: color-mix(in oklch, var(--muted) 74%, white 26%);
+    background: color-mix(in oklch, var(--muted) 58%, var(--card) 42%);
     border: 1px solid var(--border);
     color: var(--muted-foreground);
   }
 
+  .history-pill--primary {
+    background: color-mix(in oklch, var(--primary) 16%, var(--card) 84%);
+    border-color: color-mix(in oklch, var(--primary) 30%, var(--border) 70%);
+    color: var(--primary);
+  }
+
+  .history-pill--danger {
+    background: color-mix(in oklch, var(--destructive) 16%, var(--card) 84%);
+    border-color: color-mix(in oklch, var(--destructive) 30%, var(--border) 70%);
+    color: color-mix(in oklch, var(--destructive) 78%, var(--foreground) 22%);
+  }
+
   .history-input,
   .history-select {
-    background: var(--card);
+    background: color-mix(in oklch, var(--card) 92%, var(--background) 8%);
     border: 1px solid var(--input);
     color: var(--foreground);
   }
@@ -175,21 +188,99 @@
   .history-input:focus,
   .history-select:focus {
     border-color: var(--ring);
-    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 18%, white 82%);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 22%, transparent 78%);
   }
 
   .history-table-head {
-    background: color-mix(in oklch, var(--secondary) 58%, white 42%);
+    background: color-mix(in oklch, var(--secondary) 44%, var(--card) 56%);
     color: var(--muted-foreground);
   }
 
   .history-detail-grid > div {
     padding: 0.75rem 0;
-    border-bottom: 1px solid color-mix(in oklch, var(--border) 90%, white 10%);
+    border-bottom: 1px solid color-mix(in oklch, var(--border) 82%, var(--card) 18%);
   }
 
   .history-detail-grid > div:last-child,
   .history-detail-grid > div:nth-last-child(2) {
     border-bottom: 0;
+  }
+
+  .history-status {
+    display: inline-flex;
+    align-items: center;
+    border-width: 1px;
+    border-radius: 9999px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+  }
+
+  .history-status--pending {
+    background: color-mix(in oklch, var(--chart-4) 18%, var(--card) 82%);
+    border-color: color-mix(in oklch, var(--chart-4) 32%, var(--border) 68%);
+    color: color-mix(in oklch, var(--chart-4) 82%, var(--foreground) 18%);
+  }
+
+  .history-status--processing,
+  .history-status--completed,
+  .history-status--fiscalization-moved,
+  .history-status--fiscalization-polled {
+    background: color-mix(in oklch, var(--chart-2) 18%, var(--card) 82%);
+    border-color: color-mix(in oklch, var(--chart-2) 32%, var(--border) 68%);
+    color: color-mix(in oklch, var(--chart-2) 84%, var(--foreground) 16%);
+  }
+
+  .history-status--delayed,
+  .history-status--fiscalization-webhook {
+    background: color-mix(in oklch, var(--primary) 18%, var(--card) 82%);
+    border-color: color-mix(in oklch, var(--primary) 32%, var(--border) 68%);
+    color: var(--primary);
+  }
+
+  .history-status--watch {
+    background: color-mix(in oklch, var(--chart-3) 18%, var(--card) 82%);
+    border-color: color-mix(in oklch, var(--chart-3) 32%, var(--border) 68%);
+    color: color-mix(in oklch, var(--chart-3) 84%, var(--foreground) 16%);
+  }
+
+  .history-status--failed,
+  .history-status--timeout,
+  .history-status--error {
+    background: color-mix(in oklch, var(--destructive) 18%, var(--card) 82%);
+    border-color: color-mix(in oklch, var(--destructive) 32%, var(--border) 68%);
+    color: color-mix(in oklch, var(--destructive) 82%, var(--foreground) 18%);
+  }
+
+  .history-status--muted {
+    background: color-mix(in oklch, var(--muted) 58%, var(--card) 42%);
+    border-color: var(--border);
+    color: var(--muted-foreground);
+  }
+
+  .history-stat--slate {
+    background: color-mix(in oklch, var(--card) 94%, var(--background) 6%);
+    border-color: var(--border);
+  }
+
+  .history-stat--success {
+    background: color-mix(in oklch, var(--chart-2) 14%, var(--card) 86%);
+    border-color: color-mix(in oklch, var(--chart-2) 26%, var(--border) 74%);
+  }
+
+  .history-stat--danger {
+    background: color-mix(in oklch, var(--destructive) 14%, var(--card) 86%);
+    border-color: color-mix(in oklch, var(--destructive) 26%, var(--border) 74%);
+  }
+
+  .history-stat--primary {
+    background: color-mix(in oklch, var(--primary) 14%, var(--card) 86%);
+    border-color: color-mix(in oklch, var(--primary) 26%, var(--border) 74%);
+  }
+
+  .history-stat--accent {
+    background: color-mix(in oklch, var(--accent) 18%, var(--card) 82%);
+    border-color: color-mix(in oklch, var(--accent) 26%, var(--border) 74%);
   }
 }

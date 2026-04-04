@@ -12,16 +12,16 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_oklch,var(--ring)_24%,transparent_76%)] disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         default:
-          "bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-95 focus-visible:ring-[color:color-mix(in_oklch,var(--ring)_25%,white_75%)]",
+          "border border-[color:color-mix(in_oklch,var(--primary)_30%,var(--border)_70%)] bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[color:color-mix(in_oklch,var(--primary)_86%,var(--foreground)_14%)]",
         outline:
-          "border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-[color:color-mix(in_oklch,var(--accent)_48%,white_52%)] focus-visible:ring-[color:color-mix(in_oklch,var(--ring)_25%,white_75%)]",
+          "border border-[var(--border)] bg-[color:color-mix(in_oklch,var(--card)_92%,var(--background)_8%)] text-[var(--foreground)] hover:bg-[color:color-mix(in_oklch,var(--accent)_48%,var(--card)_52%)]",
         secondary:
-          "border border-[color:color-mix(in_oklch,var(--primary)_20%,white_80%)] bg-[color:color-mix(in_oklch,var(--primary)_10%,white_90%)] text-[var(--primary)] hover:bg-[color:color-mix(in_oklch,var(--primary)_16%,white_84%)] focus-visible:ring-[color:color-mix(in_oklch,var(--ring)_25%,white_75%)]",
+          "border border-[color:color-mix(in_oklch,var(--secondary)_34%,var(--border)_66%)] bg-[color:color-mix(in_oklch,var(--secondary)_54%,var(--card)_46%)] text-[var(--secondary-foreground)] hover:bg-[color:color-mix(in_oklch,var(--secondary)_68%,var(--card)_32%)]",
       },
       size: {
         default: "h-10 px-4 py-2",
@@ -114,7 +114,7 @@ function StatSkeleton({ title }: { title: string }) {
   return (
     <div className="history-surface rounded-[var(--radius)] p-3">
       <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">{title}</div>
-      <div className="mt-2 h-7 w-20 rounded-md bg-[color:color-mix(in_oklch,var(--muted)_70%,white_30%)]" />
+      <div className="mt-2 h-7 w-20 rounded-md bg-[color:color-mix(in_oklch,var(--muted)_72%,var(--card)_28%)]" />
     </div>
   );
 }
@@ -245,13 +245,13 @@ function AppShell() {
                 <p className="text-sm font-medium text-[var(--foreground)]">Тягну історію…</p>
               </div>
 
-              <div id="errorState" className="hidden rounded-[var(--radius)] border border-[color:color-mix(in_oklch,var(--destructive)_25%,white_75%)] bg-[color:color-mix(in_oklch,var(--destructive)_8%,white_92%)] px-4 py-8 text-center text-[color:color-mix(in_oklch,var(--destructive)_78%,black_22%)]" role="alert"></div>
+              <div id="errorState" className="hidden rounded-[var(--radius)] border border-[color:color-mix(in_oklch,var(--destructive)_30%,var(--border)_70%)] bg-[color:color-mix(in_oklch,var(--destructive)_14%,var(--card)_86%)] px-4 py-8 text-center text-[color:color-mix(in_oklch,var(--destructive)_82%,var(--foreground)_18%)]" role="alert"></div>
 
               <div id="emptyState" className="history-surface hidden rounded-[var(--radius)] px-4 py-12 text-center">
                 <p className="text-sm font-medium">Нічого не знайдено</p>
               </div>
 
-              <div id="tableWrap" className="hidden overflow-x-auto rounded-[var(--radius)] border bg-[color:color-mix(in_oklch,var(--card)_94%,white_6%)]" tabIndex={0}>
+              <div id="tableWrap" className="hidden overflow-x-auto rounded-[var(--radius)] border bg-[color:color-mix(in_oklch,var(--card)_94%,var(--background)_6%)]" tabIndex={0}>
                 <table id="history-results" className="min-w-full divide-y text-sm">
                   <caption className="sr-only">Історія замовлень і синхронізації з KeyCRM</caption>
                   <thead className="history-table-head sticky top-0 text-left text-[11px] uppercase tracking-[0.18em]">
@@ -264,7 +264,7 @@ function AppShell() {
                       <th scope="col" className="px-4 py-3">Активність</th>
                     </tr>
                   </thead>
-                  <tbody id="historyTableBody" className="divide-y bg-[color:color-mix(in_oklch,var(--card)_97%,white_3%)]"></tbody>
+                  <tbody id="historyTableBody" className="divide-y bg-[color:color-mix(in_oklch,var(--card)_97%,var(--background)_3%)]"></tbody>
                 </table>
               </div>
             </CardContent>
