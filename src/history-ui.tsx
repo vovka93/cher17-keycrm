@@ -60,7 +60,7 @@ function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <section
       className={cn(
-        "rounded-2xl border border-slate-800 bg-slate-950/75 shadow-[0_24px_80px_-28px_rgba(6,182,212,0.25)] backdrop-blur-xl",
+        "rounded-2xl border border-slate-800 bg-slate-950/95 shadow-[0_24px_80px_-28px_rgba(6,182,212,0.25)]",
         className,
       )}
       {...props}
@@ -341,7 +341,7 @@ function AppShell() {
               <div id="tableWrap" className="hidden overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/80" tabIndex={0}>
                 <table id="history-results" className="min-w-full divide-y divide-slate-800 text-sm">
                   <caption className="sr-only">Історія замовлень і синхронізації з KeyCRM</caption>
-                  <thead className="sticky top-0 bg-slate-900/95 text-left text-[11px] uppercase tracking-[0.18em] text-slate-300 backdrop-blur">
+                  <thead className="sticky top-0 bg-slate-900 text-left text-[11px] uppercase tracking-[0.18em] text-slate-300">
                     <tr>
                       <th scope="col" className="px-4 py-3">Замовлення</th>
                       <th scope="col" className="px-4 py-3">Клієнт</th>

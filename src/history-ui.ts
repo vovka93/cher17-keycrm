@@ -9,7 +9,7 @@ export function renderHistoryPage() {
     <title>${HISTORY_UI_TITLE}</title>
     <link rel="stylesheet" href="/history/styles.css" />
     <style>
-      .glass { background: rgba(15, 23, 42, 0.78); backdrop-filter: blur(14px); }
+      .glass { background: rgba(15, 23, 42, 0.96); }
     </style>
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100">
