@@ -166,7 +166,9 @@ export async function getOrderMapping(
   const mappingData = await redis.get(REDIS_KEYS.ORDER_MAPPING(rowid));
   if (!mappingData) return null;
 
-  return JSON.parse(mappingData as string);
+  const mapping: OrderMapping = JSON.parse(mappingData as string);
+  mapping.status_history = await getStatusHistoryFromHash(rowid);
+  return mapping;
 }
 
 export async function getOrderHistory(

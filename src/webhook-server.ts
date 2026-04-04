@@ -14,6 +14,8 @@ import { renderHistoryPage } from "./history-ui.tsx";
 import historyAppScript from "./history-app.js" with { type: "text" };
 import redis from "./redis";
 import { handleFiscalizationWebhook } from "./fiscalization-service";
+import { getDelayedQueueCount, getNextDelayedRunAt } from "./delayed-queue";
+import { getWorkerStats } from "./worker-observability";
 
 export function createWebhookServer() {
   const HISTORY_SEARCH_LIMIT = 1000;
@@ -445,12 +447,13 @@ export function createWebhookServer() {
   const dlqRouter = new Elysia({ prefix: "/dlq" })
     .get("/", async () => {
       const dlqCount = await redis.llen(REDIS_KEYS.DEAD_LETTER_QUEUE);
-      const items: SiteOrder[] = [];
+      const items: Array<{ order: SiteOrder; reason?: string; retryCount?: number; errorMessage?: string; failedAt?: number }> = [];
 
       for (let i = 0; i < Math.min(dlqCount, 100); i++) {
         const item = await redis.lindex(REDIS_KEYS.DEAD_LETTER_QUEUE, i);
         if (!item) continue;
-        items.push(JSON.parse(item as string));
+        const parsed = JSON.parse(item as string);
+        items.push(parsed.order ? parsed : { order: parsed });
       }
 
       return {
@@ -467,13 +470,14 @@ export function createWebhookServer() {
           const item = await redis.lindex(REDIS_KEYS.DEAD_LETTER_QUEUE, i);
           if (!item) continue;
 
-          const order: SiteOrder = JSON.parse(item as string);
+          const parsed = JSON.parse(item as string);
+          const order: SiteOrder = parsed.order ? parsed.order : parsed;
           if (order.externalOrderId !== body.orderId) continue;
 
           await redis.lrem(REDIS_KEYS.DEAD_LETTER_QUEUE, 1, item);
           await redis.del(REDIS_KEYS.RETRY_COUNT(body.orderId));
           await redis.del(REDIS_KEYS.RETRY_AT(body.orderId));
-          await redis.rpush(REDIS_KEYS.PENDING_QUEUE, item);
+          await redis.rpush(REDIS_KEYS.PENDING_QUEUE, JSON.stringify(order));
 
           return {
             success: true,
@@ -563,17 +567,34 @@ export function createWebhookServer() {
       .get("/health", async () => {
         const pendingCount = await redis.llen(REDIS_KEYS.PENDING_QUEUE);
         const processingCount = await redis.llen(REDIS_KEYS.PROCESSING_QUEUE);
+        const delayedCount = await getDelayedQueueCount(REDIS_KEYS.DELAYED_QUEUE);
         const dlqCount = await redis.llen(REDIS_KEYS.DEAD_LETTER_QUEUE);
         const fiscalizationCount = await redis.llen(REDIS_KEYS.FISCALIZATION_QUEUE);
+        const fiscalizationDelayedCount = await getDelayedQueueCount(REDIS_KEYS.FISCALIZATION_DELAYED_QUEUE);
+        const fiscalizationDlqCount = await redis.llen(REDIS_KEYS.FISCALIZATION_DEAD_LETTER_QUEUE);
+        const nextOrderRunAt = await getNextDelayedRunAt(REDIS_KEYS.DELAYED_QUEUE);
+        const nextFiscalizationRunAt = await getNextDelayedRunAt(REDIS_KEYS.FISCALIZATION_DELAYED_QUEUE);
+        const workers = {
+          orders: await getWorkerStats("orders"),
+          fiscalization: await getWorkerStats("fiscalization"),
+        };
 
         return {
           status: "healthy",
           queues: {
             pending: pendingCount,
             processing: processingCount,
+            delayed: delayedCount,
             fiscalization: fiscalizationCount,
+            fiscalizationDelayed: fiscalizationDelayedCount,
             deadLetter: dlqCount,
+            fiscalizationDeadLetter: fiscalizationDlqCount,
           },
+          nextRuns: {
+            orderDelayedAt: nextOrderRunAt,
+            fiscalizationDelayedAt: nextFiscalizationRunAt,
+          },
+          workers,
         };
       })
 

@@ -11,6 +11,7 @@ import {
   validateSiteOrder,
   calculateOrderTotal,
 } from "./utils";
+import { enqueueDelayed } from "./delayed-queue";
 import {
   createOrUpdateOrderMapping,
   addStatusToHistory,
@@ -173,6 +174,16 @@ async function moveDuplicateLeadToPaidStatus(
   );
 }
 
+function createDlqPayload(order: SiteOrder, reason: string, retryCount: number, errorMessage?: string) {
+  return JSON.stringify({
+    order,
+    reason,
+    retryCount,
+    errorMessage,
+    failedAt: Date.now(),
+  });
+}
+
 /**
  * Додавання замовлення в чергу обробки
  * Створює початковий запис в історії зі статусом 'pending'
@@ -205,6 +216,13 @@ export async function enqueueOrder(order: SiteOrder): Promise<void> {
   }
 
   const orderData = JSON.stringify(order);
+  const enqueueGuardKey = REDIS_KEYS.ORDER_ENQUEUE_GUARD(order.externalOrderId);
+  const isFirstEnqueue = (await redis.setnx(enqueueGuardKey, orderData)) === 1;
+
+  if (!isFirstEnqueue) {
+    await redis.set(enqueueGuardKey, orderData);
+  }
+  await redis.expire(enqueueGuardKey, CONFIG.PROCESSED_MARKER_TTL_SEC);
 
   if (!shouldDelayLeadCreation(order)) {
     await redis.del(REDIS_KEYS.RETRY_AT(order.externalOrderId));
@@ -213,7 +231,7 @@ export async function enqueueOrder(order: SiteOrder): Promise<void> {
   if (shouldDelayLeadCreation(order)) {
     const retryAt = Date.now() + CONFIG.LEAD_DELAY_MS;
     await redis.set(REDIS_KEYS.RETRY_AT(order.externalOrderId), retryAt.toString());
-    await redis.rpush(REDIS_KEYS.PROCESSING_QUEUE, orderData);
+    await enqueueDelayed(REDIS_KEYS.DELAYED_QUEUE, orderData, retryAt);
 
     // Створюємо початковий запис в історії
     await createOrUpdateOrderMapping(order, "pending");
@@ -660,9 +678,17 @@ export async function handleFailedOrder(orderData: string): Promise<void> {
     console.log(
       `💀 Замовлення ${orderId} переміщено в DLQ після ${retryCount} спроб`,
     );
-    await redis.rpush(REDIS_KEYS.DEAD_LETTER_QUEUE, orderData);
+    const existingMapping = await getOrderMapping(orderId);
+    const latestError = [...(existingMapping?.status_history || [])]
+      .reverse()
+      .find((entry) => entry.error_message)?.error_message;
+    await redis.rpush(
+      REDIS_KEYS.DEAD_LETTER_QUEUE,
+      createDlqPayload(siteOrder, "max_retries_exceeded", retryCount, latestError),
+    );
     await redis.del(REDIS_KEYS.RETRY_COUNT(orderId));
     await redis.del(REDIS_KEYS.RETRY_AT(orderId));
+    await addStatusToHistory(orderId, "failed", undefined, `Переміщено в DLQ після ${retryCount} спроб.`, retryCount);
     return;
   }
 
@@ -675,8 +701,16 @@ export async function handleFailedOrder(orderData: string): Promise<void> {
   const retryAt = Date.now() + backoffMs;
   await redis.set(REDIS_KEYS.RETRY_AT(orderId), retryAt.toString());
 
-  // Повертаємо в чергу обробки
-  await redis.rpush(REDIS_KEYS.PROCESSING_QUEUE, orderData);
+  // Повертаємо в delayed-чергу обробки
+  await enqueueDelayed(REDIS_KEYS.DELAYED_QUEUE, orderData, retryAt);
+
+  await addStatusToHistory(
+    orderId,
+    "retry_scheduled",
+    { message: `Retry scheduled in ${Math.round(backoffMs / 1000)}s` },
+    undefined,
+    newRetryCount,
+  );
 
   console.log(
     `🔁 Замовлення ${orderId} буде повторно оброблено через ${Math.round(backoffMs / 1000)}с (спроба ${newRetryCount}/${CONFIG.MAX_RETRIES})`,

@@ -1,7 +1,14 @@
 import redis from "./redis";
 import { CONFIG, REDIS_KEYS } from "./config";
-import type { SiteOrder } from "./types";
 import { processOrder, handleFailedOrder } from "./queue-service";
+import { moveDueDelayedJobs } from "./delayed-queue";
+import {
+  incrementWorkerCounter,
+  recordWorkerEvent,
+  recordWorkerPoll,
+} from "./worker-observability";
+
+const ORDER_WORKER = "orders";
 
 // Воркер обробки черги
 export async function processQueue(): Promise<void> {
@@ -12,36 +19,41 @@ export async function processQueue(): Promise<void> {
     isProcessing = true;
 
     try {
-      const orderData = await redis.lpop(REDIS_KEYS.PENDING_QUEUE);
+      await recordWorkerPoll(ORDER_WORKER);
+      const movedDelayed = await moveDueDelayedJobs(
+        REDIS_KEYS.DELAYED_QUEUE,
+        REDIS_KEYS.PROCESSING_QUEUE,
+        20,
+      );
+      if (movedDelayed > 0) {
+        await recordWorkerEvent(ORDER_WORKER, { last_moved_delayed: movedDelayed });
+      }
 
-      // Якщо немає нових — пробуємо processing
+      const orderData = await redis.lpop(REDIS_KEYS.PENDING_QUEUE)
+        || await redis.lpop(REDIS_KEYS.PROCESSING_QUEUE);
+
       if (!orderData) {
-        const processingOrder = await redis.lpop(REDIS_KEYS.PROCESSING_QUEUE);
-        if (!processingOrder) return;
-
-        const siteOrder: SiteOrder = JSON.parse(processingOrder as string);
-        const orderId = siteOrder.externalOrderId;
-        const retryAtStr = await redis.get(REDIS_KEYS.RETRY_AT(orderId));
-        if (!retryAtStr) {
-          console.log(`ℹ️ Відкладена/ретрай задача ${orderId} більше не актуальна, пропускаємо`);
-          return;
-        }
-
-        const retryAt = parseInt(retryAtStr as string);
-        if (Date.now() < retryAt) {
-          await redis.rpush(REDIS_KEYS.PROCESSING_QUEUE, processingOrder);
-          return;
-        }
-
-        const success = await processOrder(processingOrder as string);
-        if (!success) await handleFailedOrder(processingOrder as string);
+        await recordWorkerEvent(ORDER_WORKER, { last_result: "idle" });
         return;
       }
 
       const success = await processOrder(orderData as string);
-      if (!success) await handleFailedOrder(orderData as string);
+      if (!success) {
+        await incrementWorkerCounter(ORDER_WORKER, "failed_jobs");
+        await handleFailedOrder(orderData as string);
+        await recordWorkerEvent(ORDER_WORKER, { last_result: "retry_or_dlq" });
+        return;
+      }
+
+      await incrementWorkerCounter(ORDER_WORKER, "processed_jobs");
+      await recordWorkerEvent(ORDER_WORKER, { last_result: "processed" });
     } catch (error) {
       console.error("Помилка в воркері черги:", error);
+      await incrementWorkerCounter(ORDER_WORKER, "worker_errors");
+      await recordWorkerEvent(ORDER_WORKER, {
+        last_result: "error",
+        last_error: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       isProcessing = false;
     }

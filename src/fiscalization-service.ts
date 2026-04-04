@@ -3,6 +3,7 @@ import { SDK } from "./sdk.generated";
 import { CONFIG, REDIS_KEYS } from "./config";
 import { addStatusToHistory, getOrderMapping } from "./order-mapping-service";
 import { calculateBackoff } from "./utils";
+import { enqueueDelayed } from "./delayed-queue";
 
 const api = new SDK("https://openapi.keycrm.app/v1", Bun.env["KEYCRM_KEY"]);
 const BAS_STATUS_ID = 4;
@@ -75,6 +76,23 @@ async function appendFiscalizationHistory(
   await addStatusToHistory(siteOrderId, status, crmResponse, errorMessage, retryCount);
 }
 
+function createFiscalizationDlqPayload(
+  crmOrderId: string,
+  sourceUuid: string | null | undefined,
+  reason: string,
+  retryCount: number,
+  errorMessage?: string,
+) {
+  return JSON.stringify({
+    crmOrderId,
+    sourceUuid: sourceUuid ?? null,
+    reason,
+    retryCount,
+    errorMessage,
+    failedAt: Date.now(),
+  });
+}
+
 export async function enqueueFiscalizationWatch(
   crmOrderId: string,
   sourceUuid?: string | null,
@@ -107,9 +125,13 @@ export async function enqueueFiscalizationWatch(
   await redis.expire(watchKey, CONFIG.FISCALIZATION_WATCH_TTL_SEC);
   await redis.del(REDIS_KEYS.FISCALIZATION_RETRY_COUNT(crmOrderId));
   await redis.del(REDIS_KEYS.FISCALIZATION_RETRY_AT(crmOrderId));
-  await redis.rpush(
-    REDIS_KEYS.FISCALIZATION_QUEUE,
-    JSON.stringify({ crmOrderId, sourceUuid: sourceUuid ?? null }),
+  const payload = JSON.stringify({ crmOrderId, sourceUuid: sourceUuid ?? null });
+  const firstRunAt = Date.now() + CONFIG.FISCALIZATION_INITIAL_BACKOFF_MS;
+  await redis.set(REDIS_KEYS.FISCALIZATION_RETRY_AT(crmOrderId), String(firstRunAt));
+  await enqueueDelayed(
+    REDIS_KEYS.FISCALIZATION_DELAYED_QUEUE,
+    payload,
+    firstRunAt,
   );
 
   await appendFiscalizationHistory(
@@ -220,13 +242,24 @@ export async function requeueFiscalizationWatch(
   const retryCount = Number((await redis.get(retryKey)) || 0) + 1;
 
   if (retryCount > CONFIG.FISCALIZATION_MAX_RETRIES) {
+    const timeoutMessage = `Перевищено ліміт перевірок фіскалізації (${CONFIG.FISCALIZATION_MAX_RETRIES}).`;
     await appendFiscalizationHistory(
       crmOrderId,
       "fiscalization_watch_timeout",
       sourceUuid,
       undefined,
-      `Перевищено ліміт перевірок фіскалізації (${CONFIG.FISCALIZATION_MAX_RETRIES}).`,
+      timeoutMessage,
       retryCount,
+    );
+    await redis.rpush(
+      REDIS_KEYS.FISCALIZATION_DEAD_LETTER_QUEUE,
+      createFiscalizationDlqPayload(
+        crmOrderId,
+        sourceUuid,
+        "max_retries_exceeded",
+        retryCount,
+        timeoutMessage,
+      ),
     );
     await clearFiscalizationWatch(crmOrderId);
     return;
@@ -237,9 +270,10 @@ export async function requeueFiscalizationWatch(
 
   await redis.set(retryKey, String(retryCount));
   await redis.set(REDIS_KEYS.FISCALIZATION_RETRY_AT(crmOrderId), String(retryAt));
-  await redis.rpush(
-    REDIS_KEYS.FISCALIZATION_QUEUE,
+  await enqueueDelayed(
+    REDIS_KEYS.FISCALIZATION_DELAYED_QUEUE,
     JSON.stringify({ crmOrderId, sourceUuid: sourceUuid ?? null }),
+    retryAt,
   );
 
   await appendFiscalizationHistory(
@@ -273,7 +307,11 @@ export async function processFiscalizationWatchItem(
 
   const retryAtValue = await redis.get(REDIS_KEYS.FISCALIZATION_RETRY_AT(crmOrderId));
   if (retryAtValue && Date.now() < Number(retryAtValue)) {
-    await redis.rpush(REDIS_KEYS.FISCALIZATION_QUEUE, rawItem);
+    await enqueueDelayed(
+      REDIS_KEYS.FISCALIZATION_DELAYED_QUEUE,
+      rawItem,
+      Number(retryAtValue),
+    );
     return;
   }
 
