@@ -162,18 +162,22 @@ export async function addStatusToHistory(
 
 export async function getOrderMapping(
   rowid: string,
+  withHistory: boolean = true,
 ): Promise<OrderMapping | null> {
   const mappingData = await redis.get(REDIS_KEYS.ORDER_MAPPING(rowid));
   if (!mappingData) return null;
 
   const mapping: OrderMapping = JSON.parse(mappingData as string);
-  mapping.status_history = await getStatusHistoryFromHash(rowid);
+  mapping.status_history = withHistory
+    ? await getStatusHistoryFromHash(rowid)
+    : [];
   return mapping;
 }
 
 export async function getOrderHistory(
   page: number = 1,
   pageSize: number = 10,
+  withHistory: boolean = true,
 ): Promise<OrderMapping[]> {
   const offset = (page - 1) * pageSize;
   const end = offset + pageSize - 1;
@@ -190,8 +194,10 @@ export async function getOrderHistory(
 
     const mapping: OrderMapping = JSON.parse(mappingData as string);
     
-    // Get status history from hash
-    mapping.status_history = await getStatusHistoryFromHash(orderId as string);
+    // Get status history from hash only when explicitly requested
+    mapping.status_history = withHistory
+      ? await getStatusHistoryFromHash(orderId as string)
+      : [];
     
     return mapping;
   });
@@ -210,8 +216,9 @@ export async function getOrderHistoryCount(): Promise<number> {
 // Legacy function for backward compatibility
 export async function getOrderHistoryLegacy(
   limit: number = 100,
+  withHistory: boolean = true,
 ): Promise<OrderMapping[]> {
-  return getOrderHistory(1, limit);
+  return getOrderHistory(1, limit, withHistory);
 }
 
 
@@ -219,6 +226,7 @@ export async function getOrderHistoryLegacy(
 export async function getOrderMappingsByStatus(
   status: OrderMapping["current_status"],
   limit: number = 1000,
+  withHistory: boolean = true,
 ): Promise<OrderMapping[]> {
   // Get all order IDs from index
   const orderIds = await redis.zrevrange(REDIS_KEYS.ORDER_HISTORY_INDEX, 0, -1);
@@ -235,8 +243,10 @@ export async function getOrderMappingsByStatus(
     // Only include if status matches
     if (mapping.current_status !== status) return null;
     
-    // Get status history from hash
-    mapping.status_history = await getStatusHistoryFromHash(orderId as string);
+    // Get status history from hash only when explicitly requested
+    mapping.status_history = withHistory
+      ? await getStatusHistoryFromHash(orderId as string)
+      : [];
     
     return mapping;
   });

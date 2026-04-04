@@ -2,6 +2,8 @@ const state = {
   orders: [],
   filteredOrders: [],
   pagination: null,
+  details: {},
+  detailsLoading: {},
 };
 
 const statusTone = {
@@ -168,17 +170,15 @@ function getCrmSummary(order) {
   if (crm.message) summary.push(compactText(crm.message, 48));
   if (summary.length) return summary.join(' · ');
 
-  const lastHistory = [...(order.status_history || [])].reverse().find((entry) => entry.crm_response || entry.error_message);
-  if (lastHistory?.error_message) return compactText(lastHistory.error_message, 64);
-  if (lastHistory?.crm_response?.message) return compactText(lastHistory.crm_response.message, 64);
+  const latest = order.latest_history || {};
+  if (latest.error_message) return compactText(latest.error_message, 64);
+  if (latest.crm_message) return compactText(latest.crm_message, 64);
   return order.crm_order ? compactText(JSON.stringify(order.crm_order), 64) : 'Ще не було відповіді';
 }
 
 function getLatestError(order) {
-  const reversed = [...(order.status_history || [])].reverse();
-  const failedEntry = reversed.find((entry) => entry.error_message || entry.status === 'failed');
-  if (!failedEntry) return null;
-  return failedEntry.error_message || failedEntry.crm_response?.message || 'Помилка синхронізації';
+  const latest = order.latest_history || {};
+  return latest.error_message || latest.crm_message || null;
 }
 
 function isDelayedLead(order) {
@@ -308,6 +308,122 @@ function renderStats() {
   `).join('');
 }
 
+function renderOrderDetail(order) {
+  const site = order.site_order || {};
+  const crmId = getCrmOrderId(order);
+  const delayLabel = getDelayLabel(order);
+
+  const historyRows = (order.status_history || []).map((entry) => `
+    <tr class="border-b border-slate-800/60 last:border-b-0">
+      <td class="px-3 py-2"><span class="rounded-full border px-2 py-1 text-xs ${statusTone[entry.status] || statusTone.unknown}">${escapeHtml(prettifyHistoryStatus(entry.status))}</span></td>
+      <td class="px-3 py-2 text-slate-300">${escapeHtml(formatDate(entry.date))}</td>
+      <td class="px-3 py-2 text-slate-400">${escapeHtml(compactText(entry.error_message || entry.crm_response?.message || entry.crm_response?.status || entry.crm_response?.fiscal_status || '—', 120))}</td>
+      <td class="px-3 py-2 text-slate-400">${escapeHtml(entry.retry_count ?? '—')}</td>
+    </tr>
+  `).join('');
+
+  const itemsRows = (site.items || []).map((item) => `
+    <tr>
+      <td class="px-3 py-2 text-slate-200">${escapeHtml(item.name || '—')}</td>
+      <td class="px-3 py-2 text-slate-400">${escapeHtml(item.category || '—')}</td>
+      <td class="px-3 py-2 text-slate-300">${escapeHtml(item.quantity ?? '—')}</td>
+      <td class="px-3 py-2 text-slate-300">${escapeHtml(formatMoney(item.cost, site.currency || 'UAH'))}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" class="px-3 py-3 text-center text-slate-500">Немає товарів</td></tr>';
+
+  const crmFields = Object.entries(order.crm_order || {}).slice(0, 12).map(([key, value]) => `
+    <div class="rounded-lg bg-slate-950/70 px-3 py-2">
+      <div class="text-xs uppercase tracking-wide text-slate-500">${escapeHtml(key)}</div>
+      <div class="mt-1 text-slate-200 break-words">${escapeHtml(typeof value === 'object' ? compactText(JSON.stringify(value), 120) : value)}</div>
+    </div>
+  `).join('') || '<div class="text-slate-500">KeyCRM ще нічого не повернув.</div>';
+
+  return `
+    <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section class="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-950/80 to-slate-900/80 p-4 shadow-[0_20px_50px_-30px_rgba(59,130,246,0.45)]">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-sm font-semibold text-white">🧭 Дані з сайту</h3>
+          <span class="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300">source</span>
+        </div>
+        <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">👤 Customer ID</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.externalCustomerId || '—')}</dd></div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🏷️ Статус сайту</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.statusDescription || site.status || '—')}</dd></div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">⏳ Логіка черги</dt><dd class="mt-1 text-slate-200">${escapeHtml(delayLabel || 'Без відкладення')}</dd></div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🚚 Доставка</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.deliveryAddress || '—')}</dd></div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:col-span-2"><dt class="text-[11px] uppercase tracking-wide text-slate-500">📝 Додаткова інфо</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.additionalInfo || '—')}</dd></div>
+        </dl>
+        <div class="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+          <div class="border-b border-slate-800 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">🧾 Товари в замовленні</div>
+          <table class="min-w-full divide-y divide-slate-800 text-sm">
+            <thead class="bg-slate-900/80 text-left text-[11px] uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-3 py-2">Товар</th>
+                <th class="px-3 py-2">Категорія</th>
+                <th class="px-3 py-2">К-сть</th>
+                <th class="px-3 py-2">Ціна</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">${itemsRows}</tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-950/80 to-slate-900/80 p-4 shadow-[0_20px_50px_-30px_rgba(16,185,129,0.35)]">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-sm font-semibold text-white">🏢 KeyCRM + історія</h3>
+          <span class="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300">crm</span>
+        </div>
+        <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🆔 CRM ID</dt><dd class="mt-1 text-slate-200">${escapeHtml(crmId || '—')}</dd></div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🕒 Оновлено</dt><dd class="mt-1 text-slate-200">${escapeHtml(formatDate(order.updated_at))}</dd></div>
+        </dl>
+        <div class="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+          <div class="border-b border-slate-800 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">📜 Історія статусів</div>
+          <table class="min-w-full divide-y divide-slate-800 text-sm">
+            <thead class="bg-slate-900/80 text-left text-[11px] uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-3 py-2">Статус</th>
+                <th class="px-3 py-2">Дата</th>
+                <th class="px-3 py-2">Що сталося</th>
+                <th class="px-3 py-2">Retry</th>
+              </tr>
+            </thead>
+            <tbody>${historyRows || '<tr><td colspan="4" class="px-3 py-3 text-center text-slate-500">Історія ще порожня</td></tr>'}</tbody>
+          </table>
+        </div>
+        <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+          <div class="mb-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">🔎 Розібрана відповідь KeyCRM</div>
+          <div class="grid gap-2 sm:grid-cols-2 text-sm">${crmFields}</div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+async function loadOrderDetail(rowid, target) {
+  if (state.details[rowid]) {
+    target.innerHTML = renderOrderDetail(state.details[rowid]);
+    return;
+  }
+
+  if (state.detailsLoading[rowid]) return;
+  state.detailsLoading[rowid] = true;
+  target.innerHTML = '<div class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-6 text-sm text-slate-400">Тягну деталі замовлення…</div>';
+
+  try {
+    const response = await fetch(`/history/order/${encodeURIComponent(rowid)}`, { headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const payload = await response.json();
+    if (!payload.success || !payload.order) throw new Error(payload.error || 'Не вдалося завантажити деталі');
+    state.details[rowid] = payload.order;
+    target.innerHTML = renderOrderDetail(payload.order);
+  } catch (error) {
+    target.innerHTML = `<div class="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-6 text-sm text-rose-200">Не вдалося завантажити деталі: ${escapeHtml(error?.message || error)}</div>`;
+  } finally {
+    delete state.detailsLoading[rowid];
+  }
+}
+
 function renderTable() {
   const rows = state.filteredOrders;
   const total = state.pagination?.total_count || state.orders.length;
@@ -332,40 +448,14 @@ function renderTable() {
     const latestError = getLatestError(order);
     const displayStatus = getDisplayStatus(order);
     const delayLabel = getDelayLabel(order);
-    const itemNames = (site.items || []).map((item) => item.name).filter(Boolean);
-    const itemPreview = itemNames.length ? itemNames.slice(0, 2).join(', ') : '—';
-    const historyRows = (order.status_history || []).map((entry) => `
-      <tr class="border-b border-slate-800/60 last:border-b-0">
-        <td class="px-3 py-2"><span class="rounded-full border px-2 py-1 text-xs ${statusTone[entry.status] || statusTone.unknown}">${escapeHtml(prettifyHistoryStatus(entry.status))}</span></td>
-        <td class="px-3 py-2 text-slate-300">${escapeHtml(formatDate(entry.date))}</td>
-        <td class="px-3 py-2 text-slate-400">${escapeHtml(compactText(entry.error_message || entry.crm_response?.message || entry.crm_response?.status || entry.crm_response?.fiscal_status || '—', 120))}</td>
-        <td class="px-3 py-2 text-slate-400">${escapeHtml(entry.retry_count ?? '—')}</td>
-      </tr>
-    `).join('');
-
-    const itemsRows = (site.items || []).map((item) => `
-      <tr>
-        <td class="px-3 py-2 text-slate-200">${escapeHtml(item.name || '—')}</td>
-        <td class="px-3 py-2 text-slate-400">${escapeHtml(item.category || '—')}</td>
-        <td class="px-3 py-2 text-slate-300">${escapeHtml(item.quantity ?? '—')}</td>
-        <td class="px-3 py-2 text-slate-300">${escapeHtml(formatMoney(item.cost, site.currency || 'UAH'))}</td>
-      </tr>
-    `).join('') || '<tr><td colspan="4" class="px-3 py-3 text-center text-slate-500">Немає товарів</td></tr>';
-
-    const crmFields = Object.entries(order.crm_order || {}).slice(0, 12).map(([key, value]) => `
-      <div class="rounded-lg bg-slate-950/70 px-3 py-2">
-        <div class="text-xs uppercase tracking-wide text-slate-500">${escapeHtml(key)}</div>
-        <div class="mt-1 text-slate-200 break-words">${escapeHtml(typeof value === 'object' ? compactText(JSON.stringify(value), 120) : value)}</div>
-      </div>
-    `).join('') || '<div class="text-slate-500">KeyCRM ще нічого не повернув.</div>';
-
+    const itemPreview = (site.items_preview || []).length ? site.items_preview.join(', ') : '—';
     const customerName = [site.firstName, site.lastName].filter(Boolean).join(' ') || '—';
     const siteStatus = site.statusDescription || site.status || '—';
     const paymentDelivery = [site.paymentMethod, site.deliveryMethod].filter(Boolean).join(' · ') || '—';
-    const itemCount = (site.items || []).length;
+    const itemCount = Number(site.items_count || 0);
 
     return `
-      <tr class="cursor-pointer transition hover:bg-slate-900/60 focus-within:bg-slate-900/60" data-expand-row="row-${index}" tabindex="0" aria-expanded="false">
+      <tr class="cursor-pointer transition hover:bg-slate-900/60 focus-within:bg-slate-900/60" data-expand-row="row-${index}" data-rowid="${escapeHtml(order._rowid)}" tabindex="0" aria-expanded="false">
         <td class="px-4 py-4 align-top">
           <div class="flex items-start justify-between gap-3">
             <div>
@@ -404,76 +494,25 @@ function renderTable() {
       </tr>
       <tr id="row-${index}" class="hidden bg-slate-900/40">
         <td colspan="7" class="px-4 pb-5 pt-1">
-          <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <section class="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-950/80 to-slate-900/80 p-4 shadow-[0_20px_50px_-30px_rgba(59,130,246,0.45)]">
-              <div class="flex items-center justify-between gap-3">
-                <h3 class="text-sm font-semibold text-white">🧭 Дані з сайту</h3>
-                <span class="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300">source</span>
-              </div>
-              <dl class="mt-4 grid gap-3 sm:grid-cols-2">
-                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">👤 Customer ID</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.externalCustomerId || '—')}</dd></div>
-                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🏷️ Статус сайту</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.statusDescription || site.status || '—')}</dd></div>
-                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">⏳ Логіка черги</dt><dd class="mt-1 text-slate-200">${escapeHtml(delayLabel || 'Без відкладення')}</dd></div>
-                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🚚 Доставка</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.deliveryAddress || '—')}</dd></div>
-                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:col-span-2"><dt class="text-[11px] uppercase tracking-wide text-slate-500">📝 Додаткова інфо</dt><dd class="mt-1 text-slate-200">${escapeHtml(site.additionalInfo || '—')}</dd></div>
-              </dl>
-              <div class="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
-                <div class="border-b border-slate-800 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">🧾 Товари в замовленні</div>
-                <table class="min-w-full divide-y divide-slate-800 text-sm">
-                  <thead class="bg-slate-900/80 text-left text-[11px] uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th class="px-3 py-2">Товар</th>
-                      <th class="px-3 py-2">Категорія</th>
-                      <th class="px-3 py-2">К-сть</th>
-                      <th class="px-3 py-2">Ціна</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-800">${itemsRows}</tbody>
-                </table>
-              </div>
-            </section>
-
-            <section class="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-950/80 to-slate-900/80 p-4 shadow-[0_20px_50px_-30px_rgba(16,185,129,0.35)]">
-              <div class="flex items-center justify-between gap-3">
-                <h3 class="text-sm font-semibold text-white">🏢 KeyCRM + історія</h3>
-                <span class="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300">crm</span>
-              </div>
-              <dl class="mt-4 grid gap-3 sm:grid-cols-2">
-                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🆔 CRM ID</dt><dd class="mt-1 text-slate-200">${escapeHtml(crmId || '—')}</dd></div>
-                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><dt class="text-[11px] uppercase tracking-wide text-slate-500">🕒 Оновлено</dt><dd class="mt-1 text-slate-200">${escapeHtml(formatDate(order.updated_at))}</dd></div>
-              </dl>
-              <div class="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
-                <div class="border-b border-slate-800 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">📜 Історія статусів</div>
-                <table class="min-w-full divide-y divide-slate-800 text-sm">
-                  <thead class="bg-slate-900/80 text-left text-[11px] uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th class="px-3 py-2">Статус</th>
-                      <th class="px-3 py-2">Дата</th>
-                      <th class="px-3 py-2">Що сталося</th>
-                      <th class="px-3 py-2">Retry</th>
-                    </tr>
-                  </thead>
-                  <tbody>${historyRows || '<tr><td colspan="4" class="px-3 py-3 text-center text-slate-500">Історія ще порожня</td></tr>'}</tbody>
-                </table>
-              </div>
-              <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                <div class="mb-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">🔎 Розібрана відповідь KeyCRM</div>
-                <div class="grid gap-2 sm:grid-cols-2 text-sm">${crmFields}</div>
-              </div>
-            </section>
-          </div>
+          <div data-detail-target="${escapeHtml(order._rowid)}" class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-6 text-sm text-slate-500">Розкрий рядок, щоб підтягнути деталі.</div>
         </td>
       </tr>
     `;
   }).join('');
 
   document.querySelectorAll('[data-expand-row]').forEach((row) => {
-    const toggleRow = () => {
+    const toggleRow = async () => {
       const target = document.getElementById(row.getAttribute('data-expand-row'));
       if (!target) return;
       const expanded = row.getAttribute('aria-expanded') === 'true';
       target.classList.toggle('hidden', expanded);
       row.setAttribute('aria-expanded', String(!expanded));
+      if (expanded) return;
+
+      const rowid = row.getAttribute('data-rowid');
+      const detailTarget = target.querySelector('[data-detail-target]');
+      if (!rowid || !detailTarget) return;
+      await loadOrderDetail(rowid, detailTarget);
     };
 
     row.addEventListener('click', toggleRow);

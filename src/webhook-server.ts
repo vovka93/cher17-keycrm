@@ -41,7 +41,7 @@ export function createWebhookServer() {
     }
   }
 
-  async function normalizeOrder(order: OrderMapping) {
+  async function getQueueMeta(order: OrderMapping) {
     const retryAtRaw = await redis.get(REDIS_KEYS.RETRY_AT(order._rowid));
     const retryAt = retryAtRaw ? Number(retryAtRaw) : null;
     const isDelayedLead = Boolean(
@@ -52,6 +52,72 @@ export function createWebhookServer() {
     );
 
     return {
+      retry_at: retryAt,
+      is_delayed_lead: isDelayedLead,
+      delay_minutes: isDelayedLead && retryAt ? Math.max(0, Math.ceil((retryAt - Date.now()) / 60000)) : null,
+    };
+  }
+
+  function getLatestHistorySummary(order: OrderMapping) {
+    const latest = [...(order.status_history || [])].reverse().find((entry) =>
+      entry.error_message || entry.crm_response || entry.status,
+    );
+
+    return latest
+      ? {
+          status: latest.status,
+          date: latest.date,
+          error_message: latest.error_message,
+          retry_count: latest.retry_count,
+          crm_message: latest.crm_response?.message,
+          crm_status: latest.crm_response?.status,
+          fiscal_status: latest.crm_response?.fiscal_status,
+        }
+      : null;
+  }
+
+  async function normalizeOrderListItem(order: OrderMapping) {
+    const queueMeta = await getQueueMeta(order);
+    const site = order.site_order || ({} as OrderMapping["site_order"]);
+    const crm = order.crm_order || {};
+    const itemNames = (site.items || []).map((item) => item.name).filter(Boolean);
+
+    return {
+      _rowid: order._rowid,
+      current_status: order.current_status,
+      created_at: order.created_at,
+      updated_at: order.updated_at,
+      queue_meta: queueMeta,
+      latest_history: getLatestHistorySummary(order),
+      site_order: {
+        externalOrderId: site.externalOrderId,
+        externalCustomerId: site.externalCustomerId,
+        date: site.date,
+        firstName: site.firstName,
+        lastName: site.lastName,
+        email: site.email,
+        phone: site.phone,
+        totalCost: site.totalCost,
+        currency: site.currency,
+        status: site.status,
+        statusDescription: site.statusDescription,
+        paymentMethod: site.paymentMethod,
+        deliveryMethod: site.deliveryMethod,
+        items_count: (site.items || []).length,
+        items_preview: itemNames.slice(0, 2),
+      },
+      crm_order: {
+        id: crm.id,
+        status: crm.status,
+        state: crm.state,
+        message: crm.message,
+        source_uuid: crm.source_uuid,
+      },
+    };
+  }
+
+  async function normalizeOrderDetail(order: OrderMapping) {
+    return {
       _rowid: order._rowid,
       site_order: order.site_order,
       crm_order: order.crm_order,
@@ -59,11 +125,8 @@ export function createWebhookServer() {
       current_status: order.current_status,
       created_at: order.created_at,
       updated_at: order.updated_at,
-      queue_meta: {
-        retry_at: retryAt,
-        is_delayed_lead: isDelayedLead,
-        delay_minutes: isDelayedLead && retryAt ? Math.max(0, Math.ceil((retryAt - Date.now()) / 60000)) : null,
-      },
+      queue_meta: await getQueueMeta(order),
+      latest_history: getLatestHistorySummary(order),
     };
   }
 
@@ -139,8 +202,9 @@ export function createWebhookServer() {
         ? await getOrderMappingsByStatus(
             status as OrderMapping["current_status"],
             HISTORY_SEARCH_LIMIT,
+            false,
           )
-        : await getOrderHistoryLegacy(HISTORY_SEARCH_LIMIT);
+        : await getOrderHistoryLegacy(HISTORY_SEARCH_LIMIT, false);
 
       const filteredOrders = searchSource.filter((order) =>
         buildOrderSearchText(order).includes(searchQuery),
@@ -154,18 +218,27 @@ export function createWebhookServer() {
         orders = filteredOrders.slice(0, parsedLimit);
       }
     } else if (status) {
-      orders = await getOrderMappingsByStatus(
+      const limitForStatus = shouldPaginate
+        ? resolvedPageSize * pageNumber
+        : parsedLimit;
+      const scopedOrders = await getOrderMappingsByStatus(
         status as OrderMapping["current_status"],
-        parsedLimit,
+        limitForStatus,
+        false,
       );
-      totalCount = orders.length;
+      totalCount = scopedOrders.length;
+      orders = shouldPaginate
+        ? scopedOrders.slice((pageNumber - 1) * resolvedPageSize, pageNumber * resolvedPageSize)
+        : scopedOrders;
     } else if (page) {
-      orders = await getOrderHistory(pageNumber, resolvedPageSize);
+      orders = await getOrderHistory(pageNumber, resolvedPageSize, false);
       totalCount = await getOrderHistoryCount();
     } else {
-      orders = await getOrderHistoryLegacy(parsedLimit);
+      orders = await getOrderHistoryLegacy(parsedLimit, false);
       totalCount = orders.length;
     }
+
+    const normalizedOrders = await Promise.all(orders.map(normalizeOrderListItem));
 
     if (shouldPaginate) {
       const totalPages = Math.ceil(totalCount / resolvedPageSize);
@@ -183,7 +256,7 @@ export function createWebhookServer() {
           has_next: pageNumber < totalPages,
           has_prev: pageNumber > 1,
         },
-        orders: await Promise.all(orders.map(normalizeOrder)),
+        orders: normalizedOrders,
       };
     }
 
@@ -194,7 +267,7 @@ export function createWebhookServer() {
         status: status || null,
       },
       total: orders.length,
-      orders: await Promise.all(orders.map(normalizeOrder)),
+      orders: normalizedOrders,
     };
   }
 
@@ -284,6 +357,38 @@ export function createWebhookServer() {
         }),
       },
     )
+    .get(
+      "/order/:rowid",
+      async ({ headers, params, set }) => {
+        if (!isAuthorizedHistoryRequest(headers)) {
+          set.status = 401;
+          set.headers["www-authenticate"] = 'Basic realm="cher17-history"';
+          return {
+            success: false,
+            error: "Unauthorized",
+          };
+        }
+
+        const order = await getOrderMapping(params.rowid, true);
+        if (!order) {
+          set.status = 404;
+          return {
+            success: false,
+            error: "Order not found",
+          };
+        }
+
+        return {
+          success: true,
+          order: await normalizeOrderDetail(order),
+        };
+      },
+      {
+        params: t.Object({
+          rowid: t.String(),
+        }),
+      },
+    )
     .get("/app.js", ({ headers, set }) => {
       if (!isAuthorizedHistoryRequest(headers)) {
         set.status = 401;
@@ -326,13 +431,14 @@ export function createWebhookServer() {
             orders = await getOrderMappingsByStatus(
               status as OrderMapping["current_status"],
               pageSize * pageNumber, // Get enough items for pagination
+              false,
             );
             totalCount = orders.length; // Approximate for status filter
             // Apply pagination manually for status filter
             const startIndex = (pageNumber - 1) * pageSize;
             orders = orders.slice(startIndex, startIndex + pageSize);
           } else {
-            orders = await getOrderHistory(pageNumber, pageSize);
+            orders = await getOrderHistory(pageNumber, pageSize, false);
             totalCount = await getOrderHistoryCount();
           }
 
@@ -348,7 +454,7 @@ export function createWebhookServer() {
               has_next: pageNumber < totalPages,
               has_prev: pageNumber > 1,
             },
-            orders: await Promise.all(orders.map(normalizeOrder)),
+            orders: await Promise.all(orders.map(normalizeOrderListItem)),
           };
         } catch (error) {
           console.error("Error fetching paginated order history:", error);
