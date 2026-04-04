@@ -71,6 +71,12 @@ function getItemSku(item: SiteOrder["items"][number]) {
   return item.sku?.trim() || String(item.externalItemId ?? "").trim();
 }
 
+function limitText(value: string | null | undefined, maxLength: number) {
+  const text = value?.trim();
+  if (!text) return undefined;
+  return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
 // Конвертація замовлення з сайту в формат CRM
 export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
   const shippingData = parseShippingAddress(
@@ -98,7 +104,7 @@ export function convertSiteOrderToCRM(siteOrder: SiteOrder) {
       price: item.cost,
       quantity: item.quantity,
       picture: item.imageUrl,
-      comment: item.description,
+      comment: limitText(item.description, 1024),
       // Add product attributes for better categorization
       properties: item.category
         ? [
@@ -186,7 +192,7 @@ export function convertSiteOrderToPipelineCard(order: SiteOrder) {
       price: item.cost,
       quantity: item.quantity,
       picture: item.imageUrl || undefined,
-      comment: item.description,
+      comment: limitText(item.description, 1024),
       // Add product properties for better tracking
       properties: item.category
         ? [
