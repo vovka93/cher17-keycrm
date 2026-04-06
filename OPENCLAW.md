@@ -80,10 +80,13 @@
 ### Важливий нюанс по оплаті
 
 Якщо:
-- `orderStatus > 1`
 - `paymentStatus === 1`
 
 то інтеграція ставить в KeyCRM `status_id = 4`, але **тільки один раз** на замовлення.
+
+Тобто:
+- для `orderStatus = 0/1` спочатку створюємо замовлення, потім переводимо його в `status_id = 4`
+- для `orderStatus > 1` теж синхронізуємо `status_id = 4`
 
 Для цього є permanent marker:
 - `REDIS_KEYS.ORDER_PAID_STATUS_SYNCED(orderId)`

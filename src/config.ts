@@ -31,6 +31,7 @@ export const REDIS_KEYS = {
   CRM_ORDER_ID: (orderId: string) => `orders:crm_id:${orderId}`,
   CRM_ORDER_SITE_ORDER_ID: (crmOrderId: string) => `orders:site_order_id_by_crm:${crmOrderId}`,
   ORDER_PROCESSED: (orderId: string, status: number) => `orders:processed:${orderId}:status_${status}`,
+  ORDER_STATUS_UPDATE_PROCESSED: (orderId: string, statusId: number) => `orders:processed:${orderId}:crm_status_${statusId}`,
   ORDER_PAID_STATUS_SYNCED: (orderId: string) => `orders:paid_status_synced:${orderId}`,
   ORDER_ENQUEUE_GUARD: (orderId: string) => `orders:enqueue_guard:${orderId}`,
   DELAYED_QUEUE: "orders:delayed",

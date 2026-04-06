@@ -20,6 +20,7 @@ import {
 
 const api = new SDK("https://openapi.keycrm.app/v1", Bun.env["KEYCRM_KEY"]);
 const DUPLICATE_LEAD_STATUS_ID = 45;
+const PAID_ORDER_STATUS_ID = 4;
 const LEAD_SEARCH_PAGE_SIZE = 50;
 const LEAD_SEARCH_MAX_PAGES = 5;
 
@@ -508,7 +509,7 @@ async function updateExistingOrder(
       throw new Error(`CRM ID не знайдено для замовлення ${orderId}`);
     }
 
-    orderProcessedKey = REDIS_KEYS.ORDER_PROCESSED(orderId, siteOrder.orderStatus);
+    orderProcessedKey = REDIS_KEYS.ORDER_STATUS_UPDATE_PROCESSED(orderId, statusId);
     const existingUpdate = await redis.get(orderProcessedKey);
 
     if (existingUpdate) {
@@ -566,8 +567,8 @@ async function syncPaidStatusOnce(
     return;
   }
 
-  await updateExistingOrder(siteOrder, orderId, 4);
-  await redis.set(paidStatusSyncKey, "4");
+  await updateExistingOrder(siteOrder, orderId, PAID_ORDER_STATUS_ID);
+  await redis.set(paidStatusSyncKey, String(PAID_ORDER_STATUS_ID));
 }
 
 /**
@@ -637,7 +638,7 @@ export async function processOrder(orderData: string): Promise<boolean> {
         );
     }
 
-    if (orderStatus > 1 && paymentStatus === 1) {
+    if (paymentStatus === 1) {
       await syncPaidStatusOnce(siteOrder, orderId);
     }
 
