@@ -43,6 +43,42 @@ export function createWebhookServer() {
     }
   }
 
+  function logWebhookReceipt(type: string, payload: Record<string, unknown>) {
+    console.log(`📥 ${type}: ${JSON.stringify(payload)}`);
+  }
+
+  function summarizeSiteOrder(order: Partial<SiteOrder> | undefined) {
+    return {
+      externalOrderId: order?.externalOrderId ?? null,
+      orderStatus: order?.orderStatus ?? null,
+      paymentStatus: order?.paymentStatus ?? null,
+      source: order?.source ?? null,
+      totalCost: order?.totalCost ?? null,
+    };
+  }
+
+  function summarizeWebhookOrders(orders: unknown[]) {
+    const normalizedOrders = Array.isArray(orders) ? orders : [];
+    return {
+      count: normalizedOrders.length,
+      orders: normalizedOrders.slice(0, 10).map((order) => summarizeSiteOrder(order as Partial<SiteOrder>)),
+      truncated: normalizedOrders.length > 10,
+    };
+  }
+
+  function summarizeFiscalizationPayload(body: any) {
+    return {
+      event: body?.event ?? null,
+      id: body?.context?.id ?? null,
+      source_id: body?.context?.source_id ?? null,
+      source_uuid: body?.context?.source_uuid ?? null,
+      status_id: body?.context?.status_id ?? null,
+      fiscal_status: body?.context?.fiscal_status ?? null,
+      payment_status: body?.context?.payment_status ?? null,
+      updated_at: body?.context?.updated_at ?? null,
+    };
+  }
+
   async function getQueueMeta(order: OrderMapping) {
     const retryAtRaw = await redis.get(REDIS_KEYS.RETRY_AT(order._rowid));
     const retryAt = retryAtRaw ? Number(retryAtRaw) : null;
@@ -621,6 +657,8 @@ export function createWebhookServer() {
       .post(
         "/webhook",
         async ({ body }) => {
+          logWebhookReceipt("/webhook received", summarizeWebhookOrders(body.orders));
+
           for (const order of body.orders) {
             await enqueueOrder(order);
           }
@@ -643,7 +681,10 @@ export function createWebhookServer() {
             }),
           },
           error({ code, error, set }) {
-            console.error("Помилка обробки webhook:", error);
+            console.error("Помилка обробки webhook:", {
+              code,
+              message: error instanceof Error ? error.message : String(error),
+            });
             set.status = 500;
             return { error: "Internal server error" };
           },
@@ -653,14 +694,26 @@ export function createWebhookServer() {
       .post(
         "/fiscalization",
         async ({ body, set }) => {
+          const payloadSummary = summarizeFiscalizationPayload(body);
+          logWebhookReceipt("/fiscalization received", payloadSummary);
+
           try {
             const result = await handleFiscalizationWebhook(body as any);
+            logWebhookReceipt("/fiscalization handled", {
+              ...payloadSummary,
+              success: result.success,
+              action: result.action,
+              crmOrderId: result.crmOrderId ?? null,
+            });
             set.status = 200;
             return {
               ...result,
             };
           } catch (error) {
-            console.error("Помилка обробки fiscalization webhook:", error);
+            console.error("Помилка обробки fiscalization webhook:", {
+              ...payloadSummary,
+              message: error instanceof Error ? error.message : String(error),
+            });
             set.status = 400;
             return {
               success: false,
@@ -678,6 +731,17 @@ export function createWebhookServer() {
               fiscal_status: t.Optional(t.Union([t.String(), t.Null()])),
             }, { additionalProperties: true }),
           }, { additionalProperties: true }),
+          error({ code, error, set }) {
+            console.error("Помилка валідації fiscalization webhook:", {
+              code,
+              message: error instanceof Error ? error.message : String(error),
+            });
+            set.status = 400;
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : "Invalid fiscalization webhook",
+            };
+          },
         },
       )
 
