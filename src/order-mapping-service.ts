@@ -318,16 +318,26 @@ export async function getHistoryStats(): Promise<{
   let newestRecord = 0;
   let total = 0;
 
+  // Bun's RedisClient returns ZRANGE ... WITHSCORES as an array of
+  // [member, score] pairs (not a flat [member, score, member, ...] array),
+  // so iterate over the pairs directly.
+  const entries = orderIdsWithScores as unknown as Array<[string, number | string]>;
+
   // Process in batches for efficiency
   const batchSize = 100;
-  for (let i = 0; i < orderIdsWithScores.length; i += 2) {
-    const orderId = String(orderIdsWithScores[i]);
-    const timestamp = parseInt(String(orderIdsWithScores[i + 1]));
-    
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (!entry) continue;
+    const [member, score] = entry;
+    const orderId = String(member);
+    const timestamp = Number(score);
+
     // Update timestamp ranges
-    if (timestamp < oldestRecord) oldestRecord = timestamp;
-    if (timestamp > newestRecord) newestRecord = timestamp;
-    
+    if (Number.isFinite(timestamp)) {
+      if (timestamp < oldestRecord) oldestRecord = timestamp;
+      if (timestamp > newestRecord) newestRecord = timestamp;
+    }
+
     // Get mapping to check status
     const mappingData = await redis.get(REDIS_KEYS.ORDER_MAPPING(orderId));
     if (mappingData) {
@@ -337,7 +347,7 @@ export async function getHistoryStats(): Promise<{
     }
 
     // Process in batches to avoid overwhelming Redis
-    if (i > 0 && i % (batchSize * 2) === 0) {
+    if (i > 0 && i % batchSize === 0) {
       // Small delay to prevent blocking
       await new Promise(resolve => setTimeout(resolve, 1));
     }
